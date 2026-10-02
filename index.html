@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OP室 滅菌期限管理（スマート・オートフィル完全版）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        .table-container { max-height: 65vh; overflow: auto; }
+        thead { position: sticky; top: 0; z-index: 30; }
+        
+        .sticky-col-1 { position: sticky; left: 0; z-index: 20; background-color: #f8fafc; min-width: 120px; max-width: 120px; }
+        .sticky-col-2 { position: sticky; left: 120px; z-index: 20; background-color: #ffffff; min-width: 220px; max-width: 220px; }
+        
+        thead .sticky-col-1, thead .sticky-col-2 { z-index: 40; background-color: #e2e8f0; }
+        thead tr:nth-child(2) .sticky-col-1, thead tr:nth-child(2) .sticky-col-2 { background-color: #fefce8; }
+
+        .tap-btn { transition: all 0.1s ease-out; }
+        .tap-btn:active { transform: scale(0.9); filter: brightness(0.9); }
+        input[type="date"], select { cursor: pointer; }
+    </style>
+</head>
+<body class="bg-slate-100 p-2 md:p-6" x-data="appData()" x-init="initApp()">
+    <div class="max-w-[98vw] mx-auto bg-white rounded-xl shadow-xl overflow-hidden">
+        
+        <div class="bg-blue-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <h1 class="text-xl md:text-2xl font-bold">🏥 OP室 器械定数・消耗品 期限管理</h1>
+            <div class="flex gap-3 flex-wrap justify-center items-center">
+                <button @click="exportCurrentDeptToExcel()" x-show="isDataLoaded" class="text-sm md:text-base font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1.5">
+                    📥 この科をExcel出力
+                </button>
+                <button @click="openDashboard()" x-show="isDataLoaded" class="text-sm md:text-base font-bold bg-orange-500 hover:bg-orange-400 text-white px-4 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1.5">
+                    📊 全体集計
+                </button>
+                <button @click="toggleEditMode()" x-show="isDataLoaded" class="text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg shadow-md transition-colors">
+                    <span x-text="isEditMode ? '✅ 編集を完了する' : '🛠 リスト編集'"></span>
+                </button>
+            </div>
+        </div>
+
+        <div x-show="!isDataLoaded" class="p-10 flex flex-col items-center justify-center min-h-[60vh] text-center bg-white">
+            <h2 class="text-2xl font-bold text-gray-700 mb-4">🔧 初回セットアップ</h2>
+            <p class="text-gray-500 mb-8 max-w-2xl">「器械定数表 各科こちらに入力してください.xlsx」ファイルを選択してください。</p>
+            <label class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-xl text-xl shadow-lg cursor-pointer transition-transform active:scale-95">
+                📁 Excelファイルを選択する
+                <input type="file" class="hidden" accept=".xlsx, .xls" @change="handleFileUpload">
+            </label>
+        </div>
+
+        <div x-show="isDataLoaded" style="display: none;">
+            
+            <div class="bg-slate-200 py-2 border-b border-gray-300 flex justify-center items-center gap-6 shadow-inner">
+                <button @click="changeYear(-1)" class="bg-white text-blue-700 font-bold px-4 py-1 rounded shadow hover:bg-blue-50 active:scale-95">◀ 前年度</button>
+                <div class="text-2xl font-black text-blue-900 tracking-wider" x-text="currentYear + '年度'"></div>
+                <button @click="changeYear(1)" class="bg-white text-blue-700 font-bold px-4 py-1 rounded shadow hover:bg-blue-50 active:scale-95">次年度 ▶</button>
+            </div>
+
+            <div class="flex border-b bg-slate-50 overflow-x-auto shadow-sm">
+                <template x-for="dept in Object.keys(departments)">
+                    <button @click="activeTab = dept"
+                        :class="{'border-b-4 border-blue-600 bg-white font-bold text-blue-800': activeTab === dept, 'text-gray-500 hover:bg-gray-100': activeTab !== dept}"
+                        class="px-5 py-3 text-base md:text-lg font-medium focus:outline-none transition-colors whitespace-nowrap"
+                        x-text="dept"></button>
+                </template>
+            </div>
+
+            <div class="p-2 bg-yellow-50 text-sm text-gray-800 border-b border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">💡</span> 
+                    <p>確認日は空欄タップで<strong>本日を即入力</strong>。期限が1年以上先なら自動で右へ「➡」が入力されます。</p>
+                </div>
+                
+                <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border-2 border-amber-300 shadow-sm shrink-0">
+                    <span class="font-bold text-amber-900 text-xs md:text-sm">⚠️ この科のアラート基準:</span>
+                    <select x-model.number="alertSettings[activeTab]" @change="saveAlertSettings()" class="bg-amber-50 border border-amber-400 font-bold text-blue-900 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="1">1ヶ月前</option>
+                        <option value="2">2ヶ月前</option>
+                        <option value="3">3ヶ月前 (標準)</option>
+                        <option value="4">4ヶ月前</option>
+                        <option value="5">5ヶ月前</option>
+                        <option value="6">6ヶ月前</option>
+                        <option value="12">12ヶ月前 (1年前)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-container p-1">
+                <table class="min-w-full border-collapse border border-gray-300 text-center whitespace-nowrap">
+                    <thead class="bg-slate-200 shadow-sm text-sm md:text-base">
+                        <tr>
+                            <th class="border border-gray-300 p-2 text-center font-bold text-gray-700 sticky-col-1">場所</th>
+                            <th class="border border-gray-300 p-2 text-center font-bold text-gray-700 sticky-col-2">物品名</th>
+                            <template x-for="ym in displayMonths" :key="ym">
+                                <th class="border border-gray-300 p-2 min-w-[76px] w-20 font-bold text-gray-700 bg-slate-200" x-text="formatMonthHeader(ym)"></th>
+                            </template>
+                        </tr>
+                        <tr class="border-b-4 border-gray-400">
+                            <td class="border border-gray-300 p-2 font-bold text-gray-700 sticky-col-1 bg-yellow-50"></td>
+                            <td class="border border-gray-300 p-2 font-bold text-right text-gray-700 sticky-col-2 bg-yellow-50">🔍 毎月の確認日 ➡</td>
+                            <template x-for="ym in displayMonths" :key="ym">
+                                <td class="border border-gray-300 p-0 h-12 relative hover:bg-yellow-200 transition-colors bg-yellow-50 cursor-pointer"
+                                    @click="toggleCheckDate(activeTab, ym)">
+                                    <div class="w-full h-full flex items-center justify-center font-bold text-blue-700 text-sm md:text-base" 
+                                         x-text="checkDates[activeTab]?.[ym] || 'タップ'"></div>
+                                </td>
+                            </template>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm md:text-base">
+                        <template x-for="(item, index) in departments[activeTab]" :key="item.id">
+                            <tr class="hover:bg-blue-50 transition-colors" :class="{'bg-green-50': isEditMode}">
+                                <td class="border border-gray-300 p-2 font-bold text-blue-900 sticky-col-1 whitespace-normal break-words align-middle" x-text="item.location"></td>
+                                <td class="border border-gray-300 p-2 font-medium text-left text-gray-800 sticky-col-2">
+                                    <div class="flex justify-between items-center h-full">
+                                        <span class="truncate pr-1" x-text="item.name" :title="item.name"></span>
+                                        <div x-show="isEditMode" class="flex gap-1 shrink-0" style="display: none;">
+                                            <button @click.stop="moveItem(activeTab, index, -1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded shadow-sm" :disabled="index === 0" :class="{'opacity-30': index === 0}">↑</button>
+                                            <button @click.stop="moveItem(activeTab, index, 1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded shadow-sm" :disabled="index === departments[activeTab].length - 1" :class="{'opacity-30': index === departments[activeTab].length - 1}">↓</button>
+                                            <button @click.stop="removeItem(activeTab, index)" class="bg-red-500 text-white px-1 py-1 rounded shadow-sm">✖</button>
+                                        </div>
+                                    </div>
+                                </td>
+                                
+                                <template x-for="ym in displayMonths" :key="ym">
+                                    <td class="border border-gray-300 p-0 h-12 relative transition-colors cursor-pointer"
+                                        :class="{
+                                            'bg-green-500 text-white font-bold': isChronologicalError(activeTab, item.id, ym),
+                                            'bg-yellow-400 text-black font-bold': !isChronologicalError(activeTab, item.id, ym) && isAlert(activeTab, item.id, ym),
+                                            'bg-white hover:bg-yellow-50': !isChronologicalError(activeTab, item.id, ym) && !isAlert(activeTab, item.id, ym)
+                                        }"
+                                        @click="if(!isEditMode) openPad('item', activeTab, item, ym)">
+                                        <div class="w-full h-full flex items-center justify-center font-medium"
+                                             :class="{
+                                                 'text-2xl font-black text-blue-600': inputs[activeTab]?.[item.id]?.[ym] === '➡' || inputs[activeTab]?.[item.id]?.[ym] === '→',
+                                                 'text-gray-300': !inputs[activeTab]?.[item.id]?.[ym]
+                                             }"
+                                             x-text="(!inputs[activeTab]?.[item.id]?.[ym]) ? '-' : (inputs[activeTab]?.[item.id]?.[ym] === '→' ? '➡' : inputs[activeTab]?.[item.id]?.[ym])">
+                                        </div>
+                                    </td>
+                                </template>
+                            </tr>
+                        </template>
+                        <tr x-show="isEditMode" style="display: none;">
+                            <td class="border border-gray-300 p-2 bg-gray-100 sticky-col-1"></td>
+                            <td class="border border-gray-300 p-2 bg-gray-100 sticky-col-2">
+                                <button @click="openAddModal(activeTab)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow-md w-full">＋ 新しい物品を追加</button>
+                            </td>
+                            <td :colspan="displayMonths.length" class="border border-gray-300 bg-gray-100"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 物品追加モーダル -->
+    <div x-show="isAddModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isAddModalOpen = false">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform transition-all flex flex-col gap-5">
+            <h2 class="text-xl md:text-2xl font-bold text-blue-900 border-b-2 border-blue-100 pb-2"><span x-text="addModalDept"></span> への物品追加</h2>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">物品名 <span class="text-red-500">*</span></label>
+                <input type="text" x-model="addModalName" class="w-full border-2 border-gray-300 rounded-lg p-3 text-lg focus:border-blue-500 focus:outline-none" placeholder="例: シリンジ10ml">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">場所（保管場所）を指定</label>
+                <select x-model="addModalLocation" class="w-full border-2 border-gray-300 rounded-lg p-3 text-lg bg-white focus:border-blue-500 focus:outline-none mb-2 font-bold text-blue-800">
+                    <template x-for="loc in availableLocations" :key="loc">
+                        <option :value="loc" x-text="loc"></option>
+                    </template>
+                    <option value="new">➕ 新しい場所を直接入力する...</option>
+                    <option value="none">（場所なし・指定しない）</option>
+                </select>
+                <input type="text" x-show="addModalLocation === 'new'" x-model="addModalNewLocation" class="w-full border-2 border-orange-300 rounded-lg p-3 text-lg bg-orange-50 focus:border-orange-500 focus:outline-none" placeholder="新しい場所名を入力">
+            </div>
+            <div class="flex justify-end gap-3 mt-2">
+                <button @click="isAddModalOpen = false" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-xl shadow">キャンセル</button>
+                <button @click="confirmAddItem()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg">追加する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 📊 全体集計ダッシュボード -->
+    <div x-show="isDashboardOpen" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isDashboardOpen = false">
+        <div class="bg-slate-100 rounded-3xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden transform transition-all">
+            <div class="bg-blue-900 text-white p-4 flex justify-between items-center shrink-0">
+                <h2 class="text-xl md:text-2xl font-bold">📊 全体管理・集計レポート</h2>
+                <button @click="isDashboardOpen = false" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-bold shadow text-white border border-blue-400">閉じる ✖</button>
+            </div>
+            <div class="flex bg-white shadow shrink-0 text-sm md:text-lg">
+                <button @click="dashboardTab = 'alert'" :class="{'border-b-4 border-red-500 text-red-700 font-bold bg-red-50': dashboardTab === 'alert', 'text-gray-500 hover:bg-gray-100': dashboardTab !== 'alert'}" class="px-2 py-4 w-1/2 flex items-center justify-center gap-2">
+                    <span class="text-2xl">⚠️</span> 期限切迫・切れリスト <span class="bg-red-600 text-white text-xs px-2 py-1 rounded-full" x-text="alertList.length"></span>
+                </button>
+                <button @click="dashboardTab = 'idle'" :class="{'border-b-4 border-orange-500 text-orange-700 font-bold bg-orange-50': dashboardTab === 'idle', 'text-gray-500 hover:bg-gray-100': dashboardTab !== 'idle'}" class="px-2 py-4 w-1/2 flex items-center justify-center gap-2">
+                    <span class="text-2xl">📦</span> 低稼働・滞留リスト <span class="bg-orange-500 text-white text-xs px-2 py-1 rounded-full" x-text="idleList.length"></span>
+                </button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-1">
+                <div x-show="dashboardTab === 'alert'">
+                    <table class="w-full bg-white rounded-lg shadow-sm border-collapse text-left whitespace-nowrap">
+                        <thead class="bg-slate-200 sticky top-0 shadow-sm">
+                            <tr>
+                                <th class="p-3 border-b border-gray-300 font-bold">科目</th>
+                                <th class="p-3 border-b border-gray-300 font-bold text-center">科の設定</th>
+                                <th class="p-3 border-b border-gray-300 font-bold">場所</th>
+                                <th class="p-3 border-b border-gray-300 font-bold w-1/2">物品名</th>
+                                <th class="p-3 border-b border-gray-300 font-bold text-center">実際の期限</th>
+                                <th class="p-3 border-b border-gray-300 font-bold text-center">状態</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="item in alertList" :key="item.id">
+                                <tr class="hover:bg-red-50 border-b border-gray-100">
+                                    <td class="p-3 text-gray-700 font-medium" x-text="item.dept"></td>
+                                    <td class="p-3 text-center">
+                                        <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold" x-text="item.alertThreshold + 'ヶ月前基準'"></span>
+                                    </td>
+                                    <td class="p-3 text-blue-800 font-bold" x-text="item.location"></td>
+                                    <td class="p-3 text-gray-900 font-bold" x-text="item.name"></td>
+                                    <td class="p-3 text-center font-black text-lg text-red-600 tracking-wider" x-text="item.dueDate"></td>
+                                    <td class="p-3 text-center">
+                                        <span x-show="item.isExpired" class="bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm">期限切れ</span>
+                                        <span x-show="!item.isExpired" class="bg-yellow-400 text-black px-3 py-1 rounded-full text-xs font-bold shadow-sm">切迫</span>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="alertList.length === 0"><td colspan="6" class="p-10 text-center text-gray-400 font-bold text-xl">現在、期限切迫の物品はありません🎉</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div x-show="dashboardTab === 'idle'">
+                    <table class="w-full bg-white rounded-lg shadow-sm border-collapse text-left whitespace-nowrap">
+                        <thead class="bg-slate-200 sticky top-0 shadow-sm">
+                            <tr>
+                                <th class="p-3 border-b border-gray-300 font-bold">科目</th>
+                                <th class="p-3 border-b border-gray-300 font-bold">場所</th>
+                                <th class="p-3 border-b border-gray-300 font-bold w-1/2">物品名</th>
+                                <th class="p-3 border-b border-gray-300 font-bold text-center">設定されている期限</th>
+                                <th class="p-3 border-b border-gray-300 font-bold text-center">滞留期間</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="item in idleList" :key="item.id">
+                                <tr class="hover:bg-orange-50 border-b border-gray-100">
+                                    <td class="p-3 text-gray-700" x-text="item.dept"></td>
+                                    <td class="p-3 text-blue-800 font-bold" x-text="item.location"></td>
+                                    <td class="p-3 text-gray-900 font-bold" x-text="item.name"></td>
+                                    <td class="p-3 text-center font-bold text-gray-500" x-text="item.dueDate"></td>
+                                    <td class="p-3 text-center">
+                                        <span class="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm" x-text="item.idleMonths + 'ヶ月放置'"></span>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="idleList.length === 0"><td colspan="5" class="p-10 text-center text-gray-400 font-bold text-xl">1年以上滞留している物品はありません✨</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 入力パネル -->
+    <div x-show="isPadOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-2" style="display: none;" @click.self="closePadCancel()">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl p-5 flex flex-col gap-3 transform transition-all">
+            <div class="text-center text-gray-600 font-bold text-lg border-b pb-2"><span x-text="padTitle"></span></div>
+            
+            <div class="bg-slate-100 rounded-xl p-3 flex flex-col md:flex-row items-center justify-between gap-4 border border-slate-200">
+                <div class="text-slate-600 font-bold">📆 数年先の期限（年指定）はこちら：</div>
+                <input type="date" x-model="calendarDate" @change="applyCalendarDate()" class="border-2 border-slate-300 rounded-lg px-4 py-2 text-xl font-bold bg-white text-blue-800 shadow-inner w-full md:w-auto">
+            </div>
+            
+            <div class="flex items-center justify-center text-5xl font-bold text-blue-800 h-14 tracking-wider mt-2">
+                <span x-text="selectedMonth ? selectedMonth : '--'" :class="{'text-gray-300': !selectedMonth}"></span>
+                <span class="mx-2 text-gray-400">/</span>
+                <span x-text="selectedDay ? selectedDay : '--'" :class="{'text-gray-300': !selectedDay}"></span>
+            </div>
+            
+            <div class="flex gap-4">
+                <div class="w-1/3 bg-blue-50 rounded-2xl p-3 border-2 border-blue-100">
+                    <div class="text-center font-bold text-blue-600 mb-2">月 (Month)</div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <template x-for="m in 12" :key="'m'+m">
+                            <button @click="selectMonth(m)" class="tap-btn h-12 rounded-xl text-xl font-bold shadow-sm" :class="selectedMonth === m ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-800 hover:bg-blue-100'" x-text="m"></button>
+                        </template>
+                    </div>
+                </div>
+                <div class="w-2/3 bg-indigo-50 rounded-2xl p-3 border-2 border-indigo-100">
+                    <div class="text-center font-bold text-indigo-600 mb-2">日 (Day)</div>
+                    <div class="grid grid-cols-7 gap-2">
+                        <template x-for="d in 31" :key="'d'+d">
+                            <button @click="selectDay(d)" class="tap-btn h-10 rounded-xl text-lg font-bold shadow-sm" :class="selectedDay === d ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-800 hover:bg-indigo-100'" x-text="d"></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2">
+                <button @click="closePadCancel()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl text-base shadow">
+                    キャンセル
+                </button>
+                
+                <button x-show="padTarget && padTarget.type === 'item'" @click="setArrow()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 border-2 border-blue-300 font-bold py-3 rounded-xl text-base shadow flex items-center justify-center gap-1.5">
+                    ➡ <span>(先月と同じ)</span>
+                </button>
+                <div x-show="padTarget && padTarget.type === 'check'" class="flex items-center justify-center text-xs font-bold text-gray-400">
+                    ※月・日で自動確定
+                </div>
+                
+                <button @click="clearSingleCell()" class="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 font-bold py-3 rounded-xl text-sm shadow">
+                    ✕ この月だけ消す
+                </button>
+                
+                <button @click="clearAllRightCells()" class="bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 font-bold py-3 rounded-xl text-sm shadow">
+                    🗑 右もまとめて消す
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function appData() {
+            const months = [4,5,6,7,8,9,10,11,12,1,2,3];
+
+            return {
+                isDataLoaded: false,
+                isEditMode: false,
+                currentYear: 2026, 
+                departments: {},
+                activeTab: '',
+                checkDates: {}, 
+                inputs: {},
+                alertSettings: {},
+                
+                isDashboardOpen: false,
+                dashboardTab: 'alert',
+                alertList: [],
+                idleList: [],
+                
+                isPadOpen: false,
+                padTarget: null,
+                padTitle: '',
+                selectedMonth: null,
+                selectedDay: null,
+                calendarDate: '',
+
+                isAddModalOpen: false,
+                addModalDept: '',
+                addModalName: '',
+                addModalLocation: '',
+                addModalNewLocation: '',
+                availableLocations: [],
+
+                get displayMonths() {
+                    let m = [];
+                    for (let i = 4; i <= 12; i++) m.push(`${this.currentYear}-${String(i).padStart(2, '0')}`);
+                    for (let i = 1; i <= 3; i++) m.push(`${this.currentYear + 1}-${String(i).padStart(2, '0')}`);
+                    return m;
+                },
+                
+                formatMonthHeader(ym) { return parseInt(ym.split('-')[1], 10) + '月'; },
+
+                initApp() {
+                    const savedMaster = localStorage.getItem('op_master_data_v3');
+                    if (savedMaster) {
+                        this.departments = JSON.parse(savedMaster);
+                        this.activeTab = Object.keys(this.departments)[0];
+                        const savedChecksV3 = localStorage.getItem('op_check_dates_v3');
+                        const savedInputsV3 = localStorage.getItem('op_inputs_v3');
+                        const savedAlertSettings = localStorage.getItem('op_alert_settings_v3');
+                        
+                        this.checkDates = savedChecksV3 ? JSON.parse(savedChecksV3) : {};
+                        this.inputs = savedInputsV3 ? JSON.parse(savedInputsV3) : {};
+                        this.alertSettings = savedAlertSettings ? JSON.parse(savedAlertSettings) : {};
+                        
+                        this.ensureKeys();
+                        this.isDataLoaded = true;
+                    }
+                    this.$watch('checkDates', val => localStorage.setItem('op_check_dates_v3', JSON.stringify(val)), { deep: true });
+                    this.$watch('inputs', val => localStorage.setItem('op_inputs_v3', JSON.stringify(val)), { deep: true });
+                },
+                
+                getAlertMonths(dept) { return this.alertSettings[dept] !== undefined ? this.alertSettings[dept] : 3; },
+                saveAlertSettings() { localStorage.setItem('op_alert_settings_v3', JSON.stringify(this.alertSettings)); },
+                
+                ensureKeys() {
+                    this.displayMonths.forEach(ym => {
+                        for(let dept in this.departments) {
+                            if(!this.checkDates[dept]) this.checkDates[dept] = {};
+                            if(this.checkDates[dept][ym] === undefined) this.checkDates[dept][ym] = '';
+                            if(!this.inputs[dept]) this.inputs[dept] = {};
+                            if(this.alertSettings[dept] === undefined) this.alertSettings[dept] = 3;
+                            
+                            this.departments[dept].forEach(item => {
+                                if(!this.inputs[dept][item.id]) this.inputs[dept][item.id] = {};
+                                if(this.inputs[dept][item.id][ym] === undefined) this.inputs[dept][item.id][ym] = '';
+                            });
+                        }
+                    });
+                },
+
+                exportCurrentDeptToExcel() {
+                    const dept = this.activeTab;
+                    if (!dept || !this.departments[dept]) return;
+
+                    const wb = XLSX.utils.book_new();
+                    const wsData = [];
+                    
+                    const headerRow = ['場所', '物品名'];
+                    this.displayMonths.forEach(ym => headerRow.push(this.formatMonthHeader(ym)));
+                    wsData.push(headerRow);
+                    
+                    const checkRow = ['', '確認日'];
+                    this.displayMonths.forEach(ym => checkRow.push(this.checkDates[dept]?.[ym] || ''));
+                    wsData.push(checkRow);
+                    
+                    this.departments[dept].forEach(item => {
+                        const row = [item.location, item.name];
+                        this.displayMonths.forEach(ym => {
+                            row.push(this.inputs[dept]?.[item.id]?.[ym] || '');
+                        });
+                        wsData.push(row);
+                    });
+                    
+                    const ws = XLSX.utils.aoa_to_sheet(wsData);
+                    XLSX.utils.book_append_sheet(wb, ws, dept.substring(0, 30));
+                    XLSX.writeFile(wb, `${dept}_滅菌期限管理_${this.currentYear}年度.xlsx`);
+                },
+
+                changeYear(delta) { this.currentYear += delta; this.ensureKeys(); },
+                toggleEditMode() { this.isEditMode = !this.isEditMode; },
+                saveMaster() { localStorage.setItem('op_master_data_v3', JSON.stringify(this.departments)); },
+
+                toggleCheckDate(dept, ym) {
+                    if (this.isEditMode) return;
+                    if (!this.checkDates[dept][ym]) {
+                        let d = new Date();
+                        this.checkDates[dept][ym] = `${d.getMonth() + 1}/${d.getDate()}`;
+                    } else {
+                        this.openPad('check', dept, null, ym);
+                    }
+                },
+
+                openAddModal(dept) {
+                    this.addModalDept = dept;
+                    this.addModalName = '';
+                    let locs = this.departments[dept].map(i => i.location);
+                    locs = [...new Set(locs)].filter(l => l && l !== '-').sort();
+                    this.availableLocations = locs;
+                    this.addModalLocation = locs.length > 0 ? locs[0] : 'new';
+                    this.addModalNewLocation = '';
+                    this.isAddModalOpen = true;
+                },
+                
+                confirmAddItem() {
+                    let name = this.addModalName.trim();
+                    if (!name) { alert("物品名を入力してください。"); return; }
+                    let loc = '';
+                    if (this.addModalLocation === 'new') loc = this.addModalNewLocation.trim();
+                    else if (this.addModalLocation !== 'none') loc = this.addModalLocation;
+                    
+                    let id = "manual_" + Date.now();
+                    let newItem = { id: id, location: loc, name: name };
+                    let dept = this.addModalDept;
+                    
+                    if (loc === "") {
+                        this.departments[dept].push(newItem);
+                    } else {
+                        let insertIndex = -1;
+                        for (let i = this.departments[dept].length - 1; i >= 0; i--) {
+                            if (this.departments[dept][i].location === loc) { insertIndex = i; break; }
+                        }
+                        if (insertIndex !== -1) this.departments[dept].splice(insertIndex + 1, 0, newItem);
+                        else this.departments[dept].push(newItem);
+                    }
+                    this.ensureKeys();
+                    this.saveMaster();
+                    this.isAddModalOpen = false;
+                },
+
+                removeItem(dept, index) {
+                    if (confirm(`削除しますか？`)) { this.departments[dept].splice(index, 1); this.saveMaster(); }
+                },
+                moveItem(dept, index, dir) {
+                    let arr = this.departments[dept];
+                    if (dir === -1 && index > 0) {
+                        let temp = arr[index]; arr[index] = arr[index - 1]; arr[index - 1] = temp; this.saveMaster();
+                    } else if (dir === 1 && index < arr.length - 1) {
+                        let temp = arr[index]; arr[index] = arr[index + 1]; arr[index + 1] = temp; this.saveMaster();
+                    }
+                },
+
+                handleFileUpload(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {type: 'array'});
+                        let extractedData = {};
+                        workbook.SheetNames.forEach(sheetName => {
+                            if (sheetName === '見本') return;
+                            const sheet = workbook.Sheets[sheetName];
+                            const json = XLSX.utils.sheet_to_json(sheet, {header: 1});
+                            let locCol = -1, itemCol = -1, startRow = -1;
+                            for (let r = 0; r < Math.min(10, json.length); r++) {
+                                for (let c = 0; c < Math.min(5, json[r]?.length || 0); c++) {
+                                    if (String(json[r][c] || '').trim() === '場所') {
+                                        locCol = c;
+                                        for (let nextC = c + 1; nextC < Math.min(c + 4, json[r].length); nextC++) {
+                                            if (String(json[r][nextC] || '').trim()) { itemCol = nextC; break; }
+                                        }
+                                        if (itemCol !== -1) { startRow = r + 1; break; }
+                                    }
+                                }
+                                if (locCol !== -1 && itemCol !== -1) break;
+                            }
+                            let items = [];
+                            let currentLoc = "";
+                            const noise = ["滅菌期限", "～", "/", "まで", "期限の切れ", "管理者へ", "月", "日", "確認日"];
+                            const exactNoise = ['商品名', '器械名/セット名', '器械名', 'セット名', '物品名', '薬品名', '場所'];
+                            if (locCol !== -1 && itemCol !== -1) {
+                                for (let r = startRow; r < json.length; r++) {
+                                    if(!json[r]) continue;
+                                    let locVal = String(json[r][locCol] || '').trim();
+                                    let itemVal = String(json[r][itemCol] || '').trim();
+                                    if (locVal && locVal !== 'undefined') currentLoc = locVal.replace(/\n/g, ' ');
+                                    if (itemVal && itemVal !== 'undefined') {
+                                        if (noise.some(n => itemVal.includes(n)) || exactNoise.includes(itemVal) || !isNaN(itemVal) || itemVal.length < 2 || itemVal.includes('チェックリスト')) continue;
+                                        items.push({ id: currentLoc + '_' + itemVal + '_' + r, location: currentLoc, name: itemVal });
+                                    }
+                                }
+                            } else {
+                                let bestCol = -1, maxItems = 0;
+                                for (let colIdx = 0; colIdx < 4; colIdx++) {
+                                    let colData = [];
+                                    for (let r = 0; r < json.length; r++) { if (json[r] && json[r][colIdx]) colData.push(String(json[r][colIdx]).trim()); }
+                                    let cleaned = colData.filter(x => {
+                                        if(!x || !isNaN(x) || x.length < 2 || x.includes('チェックリスト')) return false;
+                                        for(let n of noise) if(x.includes(n)) return false;
+                                        return true;
+                                    });
+                                    if (cleaned.length > maxItems) { maxItems = cleaned.length; bestCol = colIdx; }
+                                }
+                                if (bestCol !== -1) {
+                                    let seen = new Set();
+                                    for (let r = 0; r < json.length; r++) {
+                                        let itemVal = String(json[r]?.[bestCol] || '').trim();
+                                        if (itemVal && itemVal !== 'undefined' && !exactNoise.includes(itemVal) && !noise.some(n => itemVal.includes(n)) && isNaN(itemVal) && itemVal.length >= 2 && !itemVal.includes('チェックリスト')) {
+                                            if (!seen.has(itemVal)) { seen.add(itemVal); items.push({ id: 'none_' + itemVal + '_' + r, location: '-', name: itemVal }); }
+                                        }
+                                    }
+                                }
+                            }
+                            if (items.length > 0) extractedData[sheetName] = items;
+                        });
+                        this.departments = extractedData;
+                        this.activeTab = Object.keys(this.departments)[0];
+                        this.currentYear = new Date().getFullYear();
+                        if (new Date().getMonth() < 3) this.currentYear--; 
+                        this.checkDates = {};
+                        this.inputs = {};
+                        this.ensureKeys();
+                        localStorage.setItem('op_master_data_v3', JSON.stringify(this.departments));
+                        this.isDataLoaded = true;
+                    };
+                    reader.readAsArrayBuffer(file);
+                },
+
+                saveAndAutoFill(value) {
+                    const dept = this.padTarget.dept;
+                    const ym = this.padTarget.month; 
+                    
+                    if (this.padTarget.type === 'check') {
+                        this.checkDates[dept][ym] = value;
+                        this.isPadOpen = false;
+                    } else {
+                        const itemId = this.padTarget.item.id;
+                        this.inputs[dept][itemId][ym] = value;
+                        
+                        // 「➡」または空欄の場合は右への自動フィル/クリアは行わない (単一セル反映のみ)
+                        if (value === '➡' || value === '→') {
+                            // 何もしない
+                        } else if (value === '') {
+                            // 単一クリア処理（何もしない）
+                        } else {
+                            // 実日付が入力された場合
+                            const [cy, cm] = ym.split('-');
+                            const baseDate = new Date(parseInt(cy), parseInt(cm) - 1, 1);
+                            const dueDate = this.parseSmartDate(value, baseDate);
+                            const oneYearLater = new Date(baseDate);
+                            oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+                            
+                            if (dueDate && dueDate >= oneYearLater) {
+                                // 1年以上先なら右を➡で埋める
+                                let startFill = false;
+                                for (let m of this.displayMonths) {
+                                    if (startFill) {
+                                        let cellVal = this.inputs[dept][itemId][m];
+                                        if (cellVal !== '' && cellVal !== '➡' && cellVal !== '→') break;
+                                        this.inputs[dept][itemId][m] = '➡';
+                                    }
+                                    if (m === ym) startFill = true;
+                                }
+                            } else {
+                                // 1年未満なら右側の既存の➡をクリアする
+                                let startClear = false;
+                                for (let m of this.displayMonths) {
+                                    if (startClear) {
+                                        let cellVal = this.inputs[dept][itemId][m];
+                                        if (cellVal === '➡' || cellVal === '→') {
+                                            this.inputs[dept][itemId][m] = '';
+                                        } else if (cellVal !== '') {
+                                            break; 
+                                        }
+                                    }
+                                    if (m === ym) startClear = true;
+                                }
+                            }
+                        }
+                        this.isPadOpen = false;
+                    }
+                },
+
+                openPad(type, dept, itemObj, ym) {
+                    if (this.isEditMode) return;
+                    this.padTarget = { type, dept, item: itemObj, month: ym }; 
+                    this.padTitle = type === 'check' ? `[確認日] ${this.formatMonthHeader(ym)} の設定` : `[${this.formatMonthHeader(ym)}期限] ${itemObj.name}`;
+                    
+                    let currentVal = type === 'check' ? this.checkDates[dept][ym] : this.inputs[dept][itemObj.id][ym];
+                    this.calendarDate = ''; 
+                    
+                    if (currentVal === '➡' || currentVal === '→') {
+                        this.selectedMonth = null; this.selectedDay = null;
+                    } else if (currentVal && currentVal.includes('/')) {
+                        let parts = currentVal.split('/');
+                        if (parts.length === 2) {
+                            this.selectedMonth = parseInt(parts[0], 10); this.selectedDay = parseInt(parts[1], 10);
+                        } else if (parts.length === 3) {
+                            this.selectedMonth = parseInt(parts[1], 10); this.selectedDay = parseInt(parts[2], 10);
+                            let y = parseInt(parts[0], 10); if (y < 100) y += 2000;
+                            this.calendarDate = `${y}-${this.selectedMonth.toString().padStart(2, '0')}-${this.selectedDay.toString().padStart(2, '0')}`;
+                        }
+                    } else {
+                        this.selectedMonth = null; this.selectedDay = null;
+                    }
+                    this.isPadOpen = true;
+                },
+                
+                applyCalendarDate() {
+                    if(this.calendarDate) {
+                        let parts = this.calendarDate.split('-');
+                        if(parts.length === 3) {
+                            let formatted = `${parts[0]}/${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
+                            this.saveAndAutoFill(formatted); 
+                        }
+                    }
+                },
+                selectMonth(m) { this.selectedMonth = m; this.calendarDate = ''; this.checkAutoClose(); },
+                selectDay(d) { this.selectedDay = d; this.calendarDate = ''; this.checkAutoClose(); },
+                checkAutoClose() {
+                    if (this.selectedMonth !== null && this.selectedDay !== null && !this.calendarDate) {
+                        setTimeout(() => { this.closePadSave(); }, 250);
+                    }
+                },
+                setArrow() { this.saveAndAutoFill('➡'); },
+                
+                clearSingleCell() {
+                    const dept = this.padTarget.dept;
+                    const ym = this.padTarget.month;
+                    if (this.padTarget.type === 'check') {
+                        this.checkDates[dept][ym] = '';
+                    } else {
+                        this.inputs[dept][this.padTarget.item.id][ym] = '';
+                    }
+                    this.isPadOpen = false;
+                },
+
+                clearAllRightCells() {
+                    const dept = this.padTarget.dept;
+                    const ym = this.padTarget.month;
+                    if (this.padTarget.type === 'check') {
+                        this.checkDates[dept][ym] = '';
+                    } else {
+                        const itemId = this.padTarget.item.id;
+                        this.inputs[dept][itemId][ym] = '';
+                        let startClear = false;
+                        for (let m of this.displayMonths) {
+                            if (startClear) {
+                                let cellVal = this.inputs[dept][itemId][m];
+                                if (cellVal === '➡' || cellVal === '→') {
+                                    this.inputs[dept][itemId][m] = '';
+                                } else if (cellVal !== '') {
+                                    break;
+                                }
+                            }
+                            if (m === ym) startClear = true;
+                        }
+                    }
+                    this.isPadOpen = false;
+                },
+                
+                closePadSave() {
+                    if (!this.selectedMonth || !this.selectedDay) return;
+                    const formatted = `${this.selectedMonth}/${this.selectedDay}`;
+                    this.saveAndAutoFill(formatted); 
+                },
+                closePadCancel() { this.isPadOpen = false; },
+
+                getAbsoluteDueDate(dept, itemId, ym) {
+                    let val = this.inputs[dept]?.[itemId]?.[ym];
+                    if (!val) return null;
+                    let targetYM = ym;
+                    let actualStr = val;
+                    if (val === '→' || val === '➡') {
+                        actualStr = null;
+                        let allKeys = Object.keys(this.inputs[dept]?.[itemId] || {}).sort();
+                        let idx = allKeys.indexOf(ym);
+                        for (let i = idx - 1; i >= 0; i--) {
+                            let prevVal = this.inputs[dept][itemId][allKeys[i]];
+                            if (prevVal && prevVal !== '→' && prevVal !== '➡') {
+                                actualStr = prevVal; targetYM = allKeys[i]; break;
+                            }
+                        }
+                    }
+                    if (!actualStr) return null;
+                    const checkStr = this.checkDates[dept]?.[targetYM];
+                    const [ty, tm] = targetYM.split('-');
+                    const baseDate = new Date(parseInt(ty), parseInt(tm) - 1, 1);
+                    const checkDate = this.parseSmartDate(checkStr, baseDate) || baseDate;
+                    return this.parseSmartDate(actualStr, checkDate);
+                },
+
+                parseSmartDate(dateStr, baseDateObj) {
+                    if (!dateStr) return null;
+                    let parts = dateStr.split('/');
+                    let y, m, d;
+                    if (parts.length === 3) {
+                        y = parseInt(parts[0], 10); m = parseInt(parts[1], 10) - 1; d = parseInt(parts[2], 10);
+                        if (y < 100) y += 2000;
+                    } else if (parts.length === 2) {
+                        m = parseInt(parts[0], 10) - 1; d = parseInt(parts[1], 10);
+                        y = baseDateObj ? baseDateObj.getFullYear() : new Date().getFullYear();
+                        if (baseDateObj && m < baseDateObj.getMonth() - 1) y += 1;
+                    } else return null;
+                    return new Date(y, m, d);
+                },
+
+                isAlert(dept, itemId, ym) {
+                    if(!this.checkDates[dept] || !this.inputs[dept] || !this.inputs[dept][itemId]) return false;
+                    const checkStr = this.checkDates[dept][ym];
+                    if (!checkStr) return false;
+                    
+                    const [cy, cm] = ym.split('-');
+                    const columnBaseDate = new Date(parseInt(cy), parseInt(cm) - 1, 1);
+                    const checkDate = this.parseSmartDate(checkStr, columnBaseDate);
+                    if (!checkDate) return false;
+                    
+                    const dueDate = this.getAbsoluteDueDate(dept, itemId, ym);
+                    if (!dueDate) return false;
+
+                    const threshold = this.getAlertMonths(dept); 
+                    const alertDate = new Date(dueDate);
+                    alertDate.setMonth(alertDate.getMonth() - threshold);
+                    return alertDate <= checkDate;
+                },
+
+                isChronologicalError(dept, itemId, ym) {
+                    const currentDate = this.getAbsoluteDueDate(dept, itemId, ym);
+                    if (!currentDate) return false;
+                    let currentVal = this.inputs[dept][itemId][ym];
+                    if (currentVal === '→' || currentVal === '➡') return false; 
+                    
+                    const allKeys = Object.keys(this.inputs[dept]?.[itemId] || {}).sort();
+                    const idx = allKeys.indexOf(ym);
+                    if (idx <= 0) return false; 
+                    
+                    for (let i = idx - 1; i >= 0; i--) {
+                        let prevYM = allKeys[i];
+                        let prevVal = this.inputs[dept][itemId][prevYM];
+                        if (prevVal) {
+                            let prevDate = this.getAbsoluteDueDate(dept, itemId, prevYM);
+                            if (prevDate && currentDate < prevDate) return true;
+                            break; 
+                        }
+                    }
+                    return false;
+                },
+
+                openDashboard() {
+                    this.alertList = [];
+                    this.idleList = [];
+                    
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    
+                    for(let dept in this.departments) {
+                        const threshold = this.getAlertMonths(dept); 
+                        const deptLimitDate = new Date(today);
+                        deptLimitDate.setMonth(today.getMonth() + threshold);
+                        
+                        for(let itemObj of this.departments[dept]) {
+                            const itemId = itemObj.id;
+                            const itemInputs = this.inputs[dept]?.[itemId] || {};
+                            const allYMs = Object.keys(itemInputs).sort();
+                            if(allYMs.length === 0) continue;
+                            
+                            let latestYM = null;
+                            for(let i = allYMs.length - 1; i >= 0; i--) {
+                                if(itemInputs[allYMs[i]]) { latestYM = allYMs[i]; break; }
+                            }
+                            if(!latestYM) continue;
+                            
+                            const dueDateObj = this.getAbsoluteDueDate(dept, itemId, latestYM);
+                            if(!dueDateObj) continue;
+                            
+                            let y = dueDateObj.getFullYear();
+                            let m = dueDateObj.getMonth() + 1;
+                            let d = dueDateObj.getDate();
+                            let displayDate = `${y}/${m}/${d}`;
+                            
+                            if(dueDateObj <= deptLimitDate) {
+                                this.alertList.push({
+                                    id: itemId + '_alert', 
+                                    dept: dept, 
+                                    alertThreshold: threshold, 
+                                    location: itemObj.location, 
+                                    name: itemObj.name,
+                                    dueDate: displayDate, 
+                                    isExpired: dueDateObj < today
+                                });
+                            }
+                            
+                            let originYM = latestYM;
+                            for(let i = allYMs.length - 1; i >= 0; i--) {
+                                let val = itemInputs[allYMs[i]];
+                                if (val && val !== '→' && val !== '➡') { originYM = allYMs[i]; break; }
+                            }
+                            
+                            const [oy, om] = originYM.split('-');
+                            let ty = today.getFullYear();
+                            let tm = today.getMonth() + 1;
+                            let idleMonths = (ty - parseInt(oy)) * 12 + (tm - parseInt(om));
+                            
+                            if(idleMonths >= 12) {
+                                this.idleList.push({
+                                    id: itemId + '_idle', dept: dept, location: itemObj.location, name: itemObj.name,
+                                    dueDate: displayDate, idleMonths: idleMonths
+                                });
+                            }
+                        }
+                    }
+                    
+                    this.alertList.sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
+                    this.idleList.sort((a,b) => b.idleMonths - a.idleMonths);
+                    this.isDashboardOpen = true;
+                }
+            }
+        }
+    </script>
+<script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('オフライン化の準備完了'))
+                    .catch(err => console.log('エラー:', err));
+            });
+        }
+    </script>
+</body>
+</body>
+</html>

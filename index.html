@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<link rel="manifest" href="./manifest.json">
-<link rel="apple-touch-icon" href="./icon.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- PWA用の追記箇所 -->
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./icon.png">
+    
     <title>OP室 滅菌期限管理（スマート・オートフィル完全版）</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -580,13 +582,12 @@
                         const itemId = this.padTarget.item.id;
                         this.inputs[dept][itemId][ym] = value;
                         
-                        // 「➡」または空欄の場合は右への自動フィル/クリアは行わない (単一セル反映のみ)
+                        let shouldAutoFill = false;
                         if (value === '➡' || value === '→') {
-                            // 何もしない
+                            // 何もしない（単一入力）
                         } else if (value === '') {
-                            // 単一クリア処理（何もしない）
+                            // 何もしない
                         } else {
-                            // 実日付が入力された場合
                             const [cy, cm] = ym.split('-');
                             const baseDate = new Date(parseInt(cy), parseInt(cm) - 1, 1);
                             const dueDate = this.parseSmartDate(value, baseDate);
@@ -594,7 +595,6 @@
                             oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
                             
                             if (dueDate && dueDate >= oneYearLater) {
-                                // 1年以上先なら右を➡で埋める
                                 let startFill = false;
                                 for (let m of this.displayMonths) {
                                     if (startFill) {
@@ -605,7 +605,6 @@
                                     if (m === ym) startFill = true;
                                 }
                             } else {
-                                // 1年未満なら右側の既存の➡をクリアする
                                 let startClear = false;
                                 for (let m of this.displayMonths) {
                                     if (startClear) {
@@ -665,7 +664,14 @@
                         setTimeout(() => { this.closePadSave(); }, 250);
                     }
                 },
-                setArrow() { this.saveAndAutoFill('➡'); },
+                
+                // ここを変更：矢印入力は単一セルのみにする
+                setArrow() { 
+                    const dept = this.padTarget.dept;
+                    const ym = this.padTarget.month;
+                    this.inputs[dept][this.padTarget.item.id][ym] = '➡';
+                    this.isPadOpen = false;
+                },
                 
                 clearSingleCell() {
                     const dept = this.padTarget.dept;
@@ -860,15 +866,5 @@
             }
         }
     </script>
-<script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('オフライン化の準備完了'))
-                    .catch(err => console.log('エラー:', err));
-            });
-        }
-    </script>
-</body>
 </body>
 </html>

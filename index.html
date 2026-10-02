@@ -6,10 +6,12 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     
-    <title>OP室 滅菌期限管理（Excelカラー対応・安全版）</title>
+    <title>OP室 滅菌期限管理（ハイブリッド安全読込版）</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- メインエンジン（テキストデータ読込用：超安定） -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- サブエンジン（色データ読込用） -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     
     <style>
@@ -45,7 +47,6 @@
                 <button @click="toggleEditMode()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors">
                     <span x-text="isEditMode ? '✅ 編集完了' : '🛠 編集'"></span>
                 </button>
-                <!-- データリセットボタン（検証・再読み込み用） -->
                 <button @click="resetData()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded shadow-md opacity-50 hover:opacity-100 transition-opacity ml-4" title="すべてのデータを消去して初期画面に戻る">
                     リセット
                 </button>
@@ -454,7 +455,6 @@
                     this.$watch('itemAlerts', val => localStorage.setItem('op_item_alerts_v4', JSON.stringify(val)), { deep: true });
                 },
                 
-                // リセットボタンの処理（テスト用）
                 resetData() {
                     if(confirm("※注意※\n読み込んだExcelデータや入力した期限・確認日がすべて消去され、初期状態に戻ります。\n本当によろしいですか？")) {
                         localStorage.clear();
@@ -606,63 +606,64 @@
                     }
                 },
 
-                // 🛠 クラッシュ回避強化版 色読み取りアップロード機能
+                // 🛠 ハイブリッド版：超・安定読み込みエンジン
                 async handleFileUpload(event, categoryKey) {
                     const file = event.target.files[0];
                     if (!file) return;
                     
                     try {
-                        const buffer = await file.arrayBuffer();
-                        const workbook = new ExcelJS.Workbook();
-                        await workbook.xlsx.load(buffer);
+                        // 1. 【超安定】SheetJSでテキストと構造を絶対に読み込む
+                        const arrayBuffer = await file.arrayBuffer();
+                        const data = new Uint8Array(arrayBuffer);
+                        const workbook = XLSX.read(data, {type: 'array'});
                         
+                        // 2. 【オプション】ExcelJSで色だけ抽出（もしエラーが起きても無視して進める）
+                        let colorMap = {};
+                        try {
+                            const buffer2 = await file.arrayBuffer();
+                            const exceljsWb = new ExcelJS.Workbook();
+                            await exceljsWb.xlsx.load(buffer2);
+                            
+                            exceljsWb.worksheets.forEach(sheet => {
+                                colorMap[sheet.name] = {};
+                                sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+                                    let rIdx = rowNumber - 1;
+                                    colorMap[sheet.name][rIdx] = {};
+                                    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                                        let cIdx = colNumber - 1;
+                                        let bgColor = '';
+                                        if (cell.fill && cell.fill.type === 'pattern' && cell.fill.fgColor) {
+                                            if (cell.fill.fgColor.argb && typeof cell.fill.fgColor.argb === 'string' && cell.fill.fgColor.argb.length === 8) {
+                                                bgColor = '#' + cell.fill.fgColor.argb.substring(2);
+                                                if (cell.fill.fgColor.argb.substring(0, 2) === '00') bgColor = '';
+                                            }
+                                        }
+                                        colorMap[sheet.name][rIdx][cIdx] = bgColor;
+                                    });
+                                });
+                            });
+                        } catch (colorError) {
+                            console.warn('色情報の読み取りをスキップしました:', colorError);
+                            // 色の読み取りに失敗しても、データ自体は読み込みを継続する
+                        }
+                        
+                        // 3. データと色を合体させる
                         let extractedData = {};
                         let pfix = categoryKey === 'instruments' ? 'inst_' : 'cons_';
                         
-                        workbook.worksheets.forEach(sheet => {
-                            if (sheet.name === '見本') return;
-                            
-                            let json = [];
-                            let colors = [];
-                            
-                            sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-                                let rIdx = rowNumber - 1;
-                                json[rIdx] = [];
-                                colors[rIdx] = [];
-                                row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-                                    let cIdx = colNumber - 1;
-                                    json[rIdx][cIdx] = cell.text ? String(cell.text).trim() : '';
-                                    
-                                    // ⚠️ エラー回避のための安全な色抽出ロジック
-                                    let bgColor = '';
-                                    try {
-                                        if (cell.fill && cell.fill.type === 'pattern' && cell.fill.fgColor) {
-                                            // ARGB（例: FFFF0000）が存在し、8文字の場合のみ処理する
-                                            if (cell.fill.fgColor.argb && typeof cell.fill.fgColor.argb === 'string' && cell.fill.fgColor.argb.length === 8) {
-                                                bgColor = '#' + cell.fill.fgColor.argb.substring(2);
-                                                if (cell.fill.fgColor.argb.substring(0, 2) === '00') bgColor = ''; // 透明回避
-                                            } 
-                                            // もしtheme（テーマカラー）指定されていた場合でもクラッシュさせず空欄（白）にする
-                                            else if (cell.fill.fgColor.theme !== undefined) {
-                                                bgColor = ''; 
-                                            }
-                                        }
-                                    } catch (e) {
-                                        // もし色取得で何らかのエラーが起きても無視して進める
-                                        bgColor = '';
-                                    }
-                                    colors[rIdx][cIdx] = bgColor;
-                                });
-                            });
+                        workbook.SheetNames.forEach(sheetName => {
+                            if (sheetName === '見本') return;
+                            const sheet = workbook.Sheets[sheetName];
+                            const json = XLSX.utils.sheet_to_json(sheet, {header: 1});
                             
                             let locCol = -1, itemCol = -1, startRow = -1;
                             for (let r = 0; r < Math.min(10, json.length); r++) {
                                 if (!json[r]) continue;
                                 for (let c = 0; c < Math.min(5, json[r].length || 0); c++) {
-                                    if (json[r][c] === '場所') {
+                                    if (String(json[r][c] || '').trim() === '場所') {
                                         locCol = c;
                                         for (let nextC = c + 1; nextC < Math.min(c + 4, json[r].length); nextC++) {
-                                            if (json[r][nextC]) { itemCol = nextC; break; }
+                                            if (String(json[r][nextC] || '').trim()) { itemCol = nextC; break; }
                                         }
                                         if (itemCol !== -1) { startRow = r + 1; break; }
                                     }
@@ -677,10 +678,12 @@
                             
                             if (locCol !== -1 && itemCol !== -1) {
                                 for (let r = startRow; r < json.length; r++) {
-                                    if (!json[r]) continue;
-                                    let locVal = json[r][locCol];
-                                    let itemVal = json[r][itemCol];
-                                    let itemColor = colors[r] && colors[r][itemCol] ? colors[r][itemCol] : '';
+                                    if(!json[r]) continue;
+                                    let locVal = String(json[r][locCol] || '').trim();
+                                    let itemVal = String(json[r][itemCol] || '').trim();
+                                    
+                                    // 色情報があれば取得
+                                    let itemColor = colorMap[sheetName]?.[r]?.[itemCol] || '';
                                     
                                     if (locVal && locVal !== 'undefined') currentLoc = locVal.replace(/\n/g, ' ');
                                     if (itemVal && itemVal !== 'undefined') {
@@ -692,7 +695,7 @@
                                 let bestCol = -1, maxItems = 0;
                                 for (let colIdx = 0; colIdx < 4; colIdx++) {
                                     let colData = [];
-                                    for (let r = 0; r < json.length; r++) { if (json[r] && json[r][colIdx]) colData.push(json[r][colIdx]); }
+                                    for (let r = 0; r < json.length; r++) { if (json[r] && json[r][colIdx]) colData.push(String(json[r][colIdx]).trim()); }
                                     let cleaned = colData.filter(x => {
                                         if(!x || !isNaN(x) || x.length < 2 || x.includes('チェックリスト')) return false;
                                         for(let n of noise) if(x.includes(n)) return false;
@@ -704,8 +707,8 @@
                                     let seen = new Set();
                                     for (let r = 0; r < json.length; r++) {
                                         if (!json[r]) continue;
-                                        let itemVal = json[r][bestCol];
-                                        let itemColor = colors[r] && colors[r][bestCol] ? colors[r][bestCol] : '';
+                                        let itemVal = String(json[r]?.[bestCol] || '').trim();
+                                        let itemColor = colorMap[sheetName]?.[r]?.[bestCol] || '';
                                         
                                         if (itemVal && itemVal !== 'undefined' && !exactNoise.includes(itemVal) && !noise.some(n => itemVal.includes(n)) && isNaN(itemVal) && itemVal.length >= 2 && !itemVal.includes('チェックリスト')) {
                                             if (!seen.has(itemVal)) { 
@@ -716,7 +719,7 @@
                                     }
                                 }
                             }
-                            if (items.length > 0) extractedData[sheet.name] = items;
+                            if (items.length > 0) extractedData[sheetName] = items;
                         });
                         
                         this.categories[categoryKey] = extractedData;
@@ -727,8 +730,8 @@
                         event.target.value = ''; 
                         
                     } catch (error) {
-                        console.error('Excel読み込みエラー:', error);
-                        alert('Excelファイルの読み込み中にエラーが発生しました。\nファイルの形式を確認してください。');
+                        console.error('致命的な読み込みエラー:', error);
+                        alert('ファイルの読み込みに失敗しました。対応していないファイル形式です。');
                     }
                 },
 

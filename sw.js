@@ -1,28 +1,55 @@
-const CACHE_NAME = 'op-sterilization-v1';
+const CACHE_NAME = 'op-sterilization-v2'; // v2にして強制アップデート
 const urlsToCache = [
     './',
     './index.html',
     './manifest.json',
-    './icon.png',
     'https://cdn.tailwindcss.com',
     'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
     'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
 ];
 
-// 初回アクセス時にファイルをすべてキャッシュ（保存）する
+// インストール時にキャッシュを保存（どれか1つ失敗しても他を道連れにしない強力な設定）
 self.addEventListener('install', event => {
+    self.skipWaiting(); // すぐに新しいバージョンを起動
     event.waitUntil(
         caches.open(CACHE_NAME).then(cache => {
-            return cache.addAll(urlsToCache);
+            return Promise.all(
+                urlsToCache.map(url => {
+                    return fetch(url).then(response => {
+                        if (!response.ok) throw new Error('Network error');
+                        return cache.put(url, response);
+                    }).catch(error => {
+                        console.warn('ファイルの保存にスキップしました:', url, error);
+                    });
+                })
+            );
         })
     );
 });
 
-// オフライン時は保存したキャッシュからデータを返す
+// 古いキャッシュ（v1）のお掃除
+self.addEventListener('activate', event => {
+    self.clients.claim();
+    event.waitUntil(
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.filter(name => name !== CACHE_NAME).map(name => caches.delete(name))
+            );
+        })
+    );
+});
+
+// オフラインの時は、保存してあるファイルを返す
 self.addEventListener('fetch', event => {
     event.respondWith(
         caches.match(event.request).then(response => {
-            return response || fetch(event.request);
+            // キャッシュにあればそれを返す、無ければ通信を試みる
+            return response || fetch(event.request).catch(() => {
+                // 通信もダメ（完全オフライン）で、画面を開こうとした場合は index.html を強制表示
+                if (event.request.mode === 'navigate') {
+                    return caches.match('./index.html');
+                }
+            });
         })
     );
 });

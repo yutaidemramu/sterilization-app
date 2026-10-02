@@ -1,11 +1,12 @@
-const CACHE_NAME = 'op-sterilization-v2'; // v2にして強制アップデート
+const CACHE_NAME = 'op-sterilization-v3'; // v3に変更して古い記憶をリセット
 const urlsToCache = [
     './',
     './index.html',
     './manifest.json',
     'https://cdn.tailwindcss.com',
     'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
-    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js' // Excelのセル色を読み取る部品を追加！
 ];
 
 // インストール時にキャッシュを保存（どれか1つ失敗しても他を道連れにしない強力な設定）
@@ -27,7 +28,7 @@ self.addEventListener('install', event => {
     );
 });
 
-// 古いキャッシュ（v1）のお掃除
+// 古いキャッシュ（v1やv2）のお掃除
 self.addEventListener('activate', event => {
     self.clients.claim();
     event.waitUntil(

@@ -3,20 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- PWA用の追記箇所 -->
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     
-    <title>OP室 滅菌期限管理（スマート・オートフィル完全版）</title>
+    <title>OP室 滅菌期限管理（Excelカラー対応・安全版）</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    
     <style>
-        .table-container { max-height: 65vh; overflow: auto; }
+        .table-container { max-height: 60vh; overflow: auto; }
         thead { position: sticky; top: 0; z-index: 30; }
         
         .sticky-col-1 { position: sticky; left: 0; z-index: 20; background-color: #f8fafc; min-width: 120px; max-width: 120px; }
-        .sticky-col-2 { position: sticky; left: 120px; z-index: 20; background-color: #ffffff; min-width: 220px; max-width: 220px; }
+        .sticky-col-2 { position: sticky; left: 120px; z-index: 20; min-width: 250px; max-width: 250px; }
         
         thead .sticky-col-1, thead .sticky-col-2 { z-index: 40; background-color: #e2e8f0; }
         thead tr:nth-child(2) .sticky-col-1, thead tr:nth-child(2) .sticky-col-2 { background-color: #fefce8; }
@@ -24,105 +25,151 @@
         .tap-btn { transition: all 0.1s ease-out; }
         .tap-btn:active { transform: scale(0.9); filter: brightness(0.9); }
         input[type="date"], select { cursor: pointer; }
+        
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-slate-100 p-2 md:p-6" x-data="appData()" x-init="initApp()">
-    <div class="max-w-[98vw] mx-auto bg-white rounded-xl shadow-xl overflow-hidden">
+    <div class="max-w-[98vw] mx-auto bg-white rounded-xl shadow-xl overflow-hidden flex flex-col h-[90vh] md:h-auto">
         
-        <div class="bg-blue-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4">
-            <h1 class="text-xl md:text-2xl font-bold">🏥 OP室 器械定数・消耗品 期限管理</h1>
-            <div class="flex gap-3 flex-wrap justify-center items-center">
-                <button @click="exportCurrentDeptToExcel()" x-show="isDataLoaded" class="text-sm md:text-base font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1.5">
-                    📥 この科をExcel出力
+        <div class="bg-blue-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
+            <h1 class="text-xl md:text-2xl font-bold">🏥 OP室 期限管理 (器械/消耗品)</h1>
+            <div class="flex gap-2 flex-wrap justify-center items-center">
+                <button @click="exportCurrentDeptToExcel()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
+                    📥 Excel出力
                 </button>
-                <button @click="openDashboard()" x-show="isDataLoaded" class="text-sm md:text-base font-bold bg-orange-500 hover:bg-orange-400 text-white px-4 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1.5">
+                <button @click="openDashboard()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-orange-500 hover:bg-orange-400 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
                     📊 全体集計
                 </button>
-                <button @click="toggleEditMode()" x-show="isDataLoaded" class="text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg shadow-md transition-colors">
-                    <span x-text="isEditMode ? '✅ 編集を完了する' : '🛠 リスト編集'"></span>
+                <button @click="toggleEditMode()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors">
+                    <span x-text="isEditMode ? '✅ 編集完了' : '🛠 編集'"></span>
+                </button>
+                <!-- データリセットボタン（検証・再読み込み用） -->
+                <button @click="resetData()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded shadow-md opacity-50 hover:opacity-100 transition-opacity ml-4" title="すべてのデータを消去して初期画面に戻る">
+                    リセット
                 </button>
             </div>
         </div>
 
-        <div x-show="!isDataLoaded" class="p-10 flex flex-col items-center justify-center min-h-[60vh] text-center bg-white">
-            <h2 class="text-2xl font-bold text-gray-700 mb-4">🔧 初回セットアップ</h2>
-            <p class="text-gray-500 mb-8 max-w-2xl">「器械定数表 各科こちらに入力してください.xlsx」ファイルを選択してください。</p>
-            <label class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-xl text-xl shadow-lg cursor-pointer transition-transform active:scale-95">
-                📁 Excelファイルを選択する
-                <input type="file" class="hidden" accept=".xlsx, .xls" @change="handleFileUpload">
-            </label>
+        <div x-show="!isSetupComplete" class="p-6 md:p-10 flex flex-col items-center justify-center flex-1 text-center bg-white overflow-y-auto">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">🔧 初期セットアップ</h2>
+            <p class="text-gray-500 mb-8 max-w-2xl">必要なExcelファイルを読み込んでください。（片方だけでも開始できます。色情報も引き継がれます）</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl mb-10">
+                <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 flex flex-col items-center gap-4 shadow-sm">
+                    <h3 class="font-bold text-blue-900 text-lg">🛠 器械定数表</h3>
+                    <div x-show="Object.keys(categories.instruments).length > 0" class="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-4 py-2 rounded-lg w-full justify-center">
+                        ✅ 読込完了（<span x-text="Object.keys(categories.instruments).length"></span>科）
+                    </div>
+                    <label class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow cursor-pointer transition-transform active:scale-95 w-full">
+                        📁 ファイルを選択
+                        <input type="file" class="hidden" accept=".xlsx, .xls" @change="e => handleFileUpload(e, 'instruments')">
+                    </label>
+                </div>
+
+                <div class="bg-green-50 border-2 border-green-200 rounded-xl p-6 flex flex-col items-center gap-4 shadow-sm">
+                    <h3 class="font-bold text-green-900 text-lg">🩹 消耗品一覧表</h3>
+                    <div x-show="Object.keys(categories.consumables).length > 0" class="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-4 py-2 rounded-lg w-full justify-center">
+                        ✅ 読込完了（<span x-text="Object.keys(categories.consumables).length"></span>科）
+                    </div>
+                    <label class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl shadow cursor-pointer transition-transform active:scale-95 w-full">
+                        📁 ファイルを選択
+                        <input type="file" class="hidden" accept=".xlsx, .xls" @change="e => handleFileUpload(e, 'consumables')">
+                    </label>
+                </div>
+            </div>
+
+            <button x-show="Object.keys(categories.instruments).length > 0 || Object.keys(categories.consumables).length > 0" 
+                    @click="completeSetup()" 
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xl py-4 px-12 rounded-full shadow-xl animate-bounce">
+                管理画面へ進む ➡
+            </button>
         </div>
 
-        <div x-show="isDataLoaded" style="display: none;">
+        <div x-show="isSetupComplete" style="display: none;" class="flex flex-col h-full">
             
-            <div class="bg-slate-200 py-2 border-b border-gray-300 flex justify-center items-center gap-6 shadow-inner">
-                <button @click="changeYear(-1)" class="bg-white text-blue-700 font-bold px-4 py-1 rounded shadow hover:bg-blue-50 active:scale-95">◀ 前年度</button>
-                <div class="text-2xl font-black text-blue-900 tracking-wider" x-text="currentYear + '年度'"></div>
-                <button @click="changeYear(1)" class="bg-white text-blue-700 font-bold px-4 py-1 rounded shadow hover:bg-blue-50 active:scale-95">次年度 ▶</button>
+            <div class="bg-slate-200 py-1.5 border-b border-gray-300 flex justify-center items-center gap-6 shadow-inner shrink-0">
+                <button @click="changeYear(-1)" class="bg-white text-blue-700 font-bold px-4 py-1 rounded shadow hover:bg-blue-50">◀ 前年</button>
+                <div class="text-xl font-black text-blue-900 tracking-wider" x-text="currentYear + '年度'"></div>
+                <button @click="changeYear(1)" class="bg-white text-blue-700 font-bold px-4 py-1 rounded shadow hover:bg-blue-50">次年 ▶</button>
             </div>
 
-            <div class="flex border-b bg-slate-50 overflow-x-auto shadow-sm">
-                <template x-for="dept in Object.keys(departments)">
-                    <button @click="activeTab = dept"
-                        :class="{'border-b-4 border-blue-600 bg-white font-bold text-blue-800': activeTab === dept, 'text-gray-500 hover:bg-gray-100': activeTab !== dept}"
-                        class="px-5 py-3 text-base md:text-lg font-medium focus:outline-none transition-colors whitespace-nowrap"
-                        x-text="dept"></button>
-                </template>
-            </div>
-
-            <div class="p-2 bg-yellow-50 text-sm text-gray-800 border-b border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-                <div class="flex items-center gap-2">
-                    <span class="text-xl">💡</span> 
-                    <p>確認日は空欄タップで<strong>本日を即入力</strong>。期限が1年以上先なら自動で右へ「➡」が入力されます。</p>
+            <div class="flex flex-col bg-slate-50 shadow-sm shrink-0">
+                <div class="flex items-center overflow-x-auto hide-scroll border-b border-gray-200" x-show="Object.keys(categories.instruments).length > 0">
+                    <div class="px-3 py-2 bg-blue-100 text-blue-900 font-bold whitespace-nowrap shrink-0 border-r border-blue-200 text-sm md:text-base">🛠 器械定数</div>
+                    <div class="flex">
+                        <template x-for="dept in Object.keys(categories.instruments)">
+                            <button @click="activeCat = 'instruments'; activeTab = dept"
+                                :class="{'border-b-4 border-blue-600 bg-white font-bold text-blue-800': activeCat === 'instruments' && activeTab === dept, 'text-gray-500 hover:bg-gray-100': !(activeCat === 'instruments' && activeTab === dept)}"
+                                class="px-4 py-2 text-sm md:text-base font-medium focus:outline-none transition-colors whitespace-nowrap"
+                                x-text="dept"></button>
+                        </template>
+                    </div>
                 </div>
-                
-                <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border-2 border-amber-300 shadow-sm shrink-0">
-                    <span class="font-bold text-amber-900 text-xs md:text-sm">⚠️ この科のアラート基準:</span>
-                    <select x-model.number="alertSettings[activeTab]" @change="saveAlertSettings()" class="bg-amber-50 border border-amber-400 font-bold text-blue-900 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
-                        <option value="1">1ヶ月前</option>
-                        <option value="2">2ヶ月前</option>
-                        <option value="3">3ヶ月前 (標準)</option>
-                        <option value="4">4ヶ月前</option>
-                        <option value="5">5ヶ月前</option>
-                        <option value="6">6ヶ月前</option>
-                        <option value="12">12ヶ月前 (1年前)</option>
-                    </select>
+                <div class="flex items-center overflow-x-auto hide-scroll border-b border-gray-200" x-show="Object.keys(categories.consumables).length > 0">
+                    <div class="px-3 py-2 bg-green-100 text-green-900 font-bold whitespace-nowrap shrink-0 border-r border-green-200 text-sm md:text-base">🩹 消耗品一覧</div>
+                    <div class="flex">
+                        <template x-for="dept in Object.keys(categories.consumables)">
+                            <button @click="activeCat = 'consumables'; activeTab = dept"
+                                :class="{'border-b-4 border-green-600 bg-white font-bold text-green-800': activeCat === 'consumables' && activeTab === dept, 'text-gray-500 hover:bg-gray-100': !(activeCat === 'consumables' && activeTab === dept)}"
+                                class="px-4 py-2 text-sm md:text-base font-medium focus:outline-none transition-colors whitespace-nowrap"
+                                x-text="dept"></button>
+                        </template>
+                    </div>
                 </div>
             </div>
 
-            <div class="table-container p-1">
+            <div class="p-2 bg-yellow-50 text-xs md:text-sm text-gray-800 border-b border-gray-200 shadow-sm flex items-center gap-2 shrink-0">
+                <span class="text-lg">💡</span> 
+                <p><strong>⚙️マーク</strong>を押すと、物品ごとに個別にアラート月数（標準は1ヶ月前）を変更できます。</p>
+            </div>
+
+            <div class="table-container p-1 flex-1">
                 <table class="min-w-full border-collapse border border-gray-300 text-center whitespace-nowrap">
                     <thead class="bg-slate-200 shadow-sm text-sm md:text-base">
                         <tr>
                             <th class="border border-gray-300 p-2 text-center font-bold text-gray-700 sticky-col-1">場所</th>
-                            <th class="border border-gray-300 p-2 text-center font-bold text-gray-700 sticky-col-2">物品名</th>
+                            <th class="border border-gray-300 p-2 text-center font-bold text-gray-700 sticky-col-2" style="background-color: #e2e8f0;">物品名 / 個別設定</th>
                             <template x-for="ym in displayMonths" :key="ym">
                                 <th class="border border-gray-300 p-2 min-w-[76px] w-20 font-bold text-gray-700 bg-slate-200" x-text="formatMonthHeader(ym)"></th>
                             </template>
                         </tr>
                         <tr class="border-b-4 border-gray-400">
                             <td class="border border-gray-300 p-2 font-bold text-gray-700 sticky-col-1 bg-yellow-50"></td>
-                            <td class="border border-gray-300 p-2 font-bold text-right text-gray-700 sticky-col-2 bg-yellow-50">🔍 毎月の確認日 ➡</td>
+                            <td class="border border-gray-300 p-2 font-bold text-right text-gray-700 sticky-col-2 bg-yellow-50" style="background-color: #fefce8;">🔍 毎月の確認日 ➡</td>
                             <template x-for="ym in displayMonths" :key="ym">
                                 <td class="border border-gray-300 p-0 h-12 relative hover:bg-yellow-200 transition-colors bg-yellow-50 cursor-pointer"
-                                    @click="toggleCheckDate(activeTab, ym)">
+                                    @click="toggleCheckDate(activeCat, activeTab, ym)">
                                     <div class="w-full h-full flex items-center justify-center font-bold text-blue-700 text-sm md:text-base" 
-                                         x-text="checkDates[activeTab]?.[ym] || 'タップ'"></div>
+                                         x-text="checkDates[activeCat]?.[activeTab]?.[ym] || 'タップ'"></div>
                                 </td>
                             </template>
                         </tr>
                     </thead>
-                    <tbody class="text-sm md:text-base">
-                        <template x-for="(item, index) in departments[activeTab]" :key="item.id">
+                    <tbody class="text-sm md:text-base" x-show="activeCat && activeTab && categories[activeCat][activeTab]">
+                        <template x-for="(item, index) in categories[activeCat][activeTab]" :key="item.id">
                             <tr class="hover:bg-blue-50 transition-colors" :class="{'bg-green-50': isEditMode}">
                                 <td class="border border-gray-300 p-2 font-bold text-blue-900 sticky-col-1 whitespace-normal break-words align-middle" x-text="item.location"></td>
-                                <td class="border border-gray-300 p-2 font-medium text-left text-gray-800 sticky-col-2">
-                                    <div class="flex justify-between items-center h-full">
-                                        <span class="truncate pr-1" x-text="item.name" :title="item.name"></span>
+                                
+                                <td class="border border-gray-300 p-2 font-medium text-left sticky-col-2"
+                                    :style="item.color ? `background-color: ${item.color};` : 'background-color: #ffffff;'"
+                                    :class="item.color ? 'text-black font-bold border-gray-400' : 'text-gray-800'">
+                                    
+                                    <div class="flex justify-between items-center h-full group">
+                                        <div class="flex items-center gap-1.5 overflow-hidden">
+                                            <span class="truncate pr-1" x-text="item.name" :title="item.name"></span>
+                                            <button @click.stop="openItemAlertModal(activeCat, activeTab, item)" class="text-gray-400 hover:text-blue-600 transition-colors shrink-0 bg-white/70 rounded-full px-1" title="個別アラート設定">⚙️</button>
+                                            
+                                            <span x-show="itemAlerts[item.id] && itemAlerts[item.id] !== 1" 
+                                                  class="text-[10px] md:text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded border border-red-200 font-bold shrink-0 shadow-sm" 
+                                                  x-text="itemAlerts[item.id] + 'ヶ月前'"></span>
+                                        </div>
+
                                         <div x-show="isEditMode" class="flex gap-1 shrink-0" style="display: none;">
-                                            <button @click.stop="moveItem(activeTab, index, -1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded shadow-sm" :disabled="index === 0" :class="{'opacity-30': index === 0}">↑</button>
-                                            <button @click.stop="moveItem(activeTab, index, 1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded shadow-sm" :disabled="index === departments[activeTab].length - 1" :class="{'opacity-30': index === departments[activeTab].length - 1}">↓</button>
-                                            <button @click.stop="removeItem(activeTab, index)" class="bg-red-500 text-white px-1 py-1 rounded shadow-sm">✖</button>
+                                            <button @click.stop="moveItem(activeCat, activeTab, index, -1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded" :disabled="index === 0">↑</button>
+                                            <button @click.stop="moveItem(activeCat, activeTab, index, 1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded" :disabled="index === categories[activeCat][activeTab].length - 1">↓</button>
+                                            <button @click.stop="removeItem(activeCat, activeTab, index)" class="bg-red-500 text-white px-1 py-1 rounded">✖</button>
                                         </div>
                                     </div>
                                 </td>
@@ -130,17 +177,17 @@
                                 <template x-for="ym in displayMonths" :key="ym">
                                     <td class="border border-gray-300 p-0 h-12 relative transition-colors cursor-pointer"
                                         :class="{
-                                            'bg-green-500 text-white font-bold': isChronologicalError(activeTab, item.id, ym),
-                                            'bg-yellow-400 text-black font-bold': !isChronologicalError(activeTab, item.id, ym) && isAlert(activeTab, item.id, ym),
-                                            'bg-white hover:bg-yellow-50': !isChronologicalError(activeTab, item.id, ym) && !isAlert(activeTab, item.id, ym)
+                                            'bg-green-500 text-white font-bold': isChronologicalError(activeCat, activeTab, item.id, ym),
+                                            'bg-yellow-400 text-black font-bold': !isChronologicalError(activeCat, activeTab, item.id, ym) && isAlert(activeCat, activeTab, item.id, ym),
+                                            'bg-white hover:bg-yellow-50': !isChronologicalError(activeCat, activeTab, item.id, ym) && !isAlert(activeCat, activeTab, item.id, ym)
                                         }"
-                                        @click="if(!isEditMode) openPad('item', activeTab, item, ym)">
+                                        @click="if(!isEditMode) openPad('item', activeCat, activeTab, item, ym)">
                                         <div class="w-full h-full flex items-center justify-center font-medium"
                                              :class="{
-                                                 'text-2xl font-black text-blue-600': inputs[activeTab]?.[item.id]?.[ym] === '➡' || inputs[activeTab]?.[item.id]?.[ym] === '→',
-                                                 'text-gray-300': !inputs[activeTab]?.[item.id]?.[ym]
+                                                 'text-2xl font-black text-blue-600': inputs[activeCat]?.[activeTab]?.[item.id]?.[ym] === '➡' || inputs[activeCat]?.[activeTab]?.[item.id]?.[ym] === '→',
+                                                 'text-gray-300': !inputs[activeCat]?.[activeTab]?.[item.id]?.[ym]
                                              }"
-                                             x-text="(!inputs[activeTab]?.[item.id]?.[ym]) ? '-' : (inputs[activeTab]?.[item.id]?.[ym] === '→' ? '➡' : inputs[activeTab]?.[item.id]?.[ym])">
+                                             x-text="(!inputs[activeCat]?.[activeTab]?.[item.id]?.[ym]) ? '-' : (inputs[activeCat]?.[activeTab]?.[item.id]?.[ym] === '→' ? '➡' : inputs[activeCat]?.[activeTab]?.[item.id]?.[ym])">
                                         </div>
                                     </td>
                                 </template>
@@ -148,8 +195,8 @@
                         </template>
                         <tr x-show="isEditMode" style="display: none;">
                             <td class="border border-gray-300 p-2 bg-gray-100 sticky-col-1"></td>
-                            <td class="border border-gray-300 p-2 bg-gray-100 sticky-col-2">
-                                <button @click="openAddModal(activeTab)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow-md w-full">＋ 新しい物品を追加</button>
+                            <td class="border border-gray-300 p-2 bg-gray-100 sticky-col-2" style="background-color: #f3f4f6;">
+                                <button @click="openAddModal(activeCat, activeTab)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow-md w-full">＋ 新しい物品を追加</button>
                             </td>
                             <td :colspan="displayMonths.length" class="border border-gray-300 bg-gray-100"></td>
                         </tr>
@@ -159,10 +206,32 @@
         </div>
     </div>
 
-    <!-- 物品追加モーダル -->
+    <!-- ⚙️ 物品 個別アラート設定モーダル -->
+    <div x-show="isItemAlertModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isItemAlertModalOpen = false">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all flex flex-col gap-4">
+            <h2 class="text-lg font-bold text-gray-700 border-b pb-2">個別アラート設定</h2>
+            <div class="text-xl font-bold text-blue-900 break-words" x-text="alertModalItem?.name"></div>
+            
+            <div class="mt-2">
+                <label class="block text-sm font-bold text-gray-600 mb-2">何ヶ月前にアラート(黄色)を出しますか？</label>
+                <select x-model.number="alertModalMonths" class="w-full border-2 border-amber-300 bg-amber-50 rounded-lg p-3 text-lg font-bold text-amber-900 focus:outline-none focus:border-amber-500 shadow-inner">
+                    <template x-for="m in 12" :key="m">
+                        <option :value="m" x-text="m + 'ヶ月前' + (m === 1 ? ' (標準)' : '')"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-4">
+                <button @click="isItemAlertModalOpen = false" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-xl shadow">キャンセル</button>
+                <button @click="saveItemAlert()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-6 rounded-xl shadow">設定を保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ➕ 物品追加モーダル -->
     <div x-show="isAddModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isAddModalOpen = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform transition-all flex flex-col gap-5">
-            <h2 class="text-xl md:text-2xl font-bold text-blue-900 border-b-2 border-blue-100 pb-2"><span x-text="addModalDept"></span> への物品追加</h2>
+            <h2 class="text-xl md:text-2xl font-bold text-blue-900 border-b-2 border-blue-100 pb-2"><span x-text="addModalDept"></span> への追加</h2>
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">物品名 <span class="text-red-500">*</span></label>
                 <input type="text" x-model="addModalName" class="w-full border-2 border-gray-300 rounded-lg p-3 text-lg focus:border-blue-500 focus:outline-none" placeholder="例: シリンジ10ml">
@@ -194,10 +263,10 @@
             </div>
             <div class="flex bg-white shadow shrink-0 text-sm md:text-lg">
                 <button @click="dashboardTab = 'alert'" :class="{'border-b-4 border-red-500 text-red-700 font-bold bg-red-50': dashboardTab === 'alert', 'text-gray-500 hover:bg-gray-100': dashboardTab !== 'alert'}" class="px-2 py-4 w-1/2 flex items-center justify-center gap-2">
-                    <span class="text-2xl">⚠️</span> 期限切迫・切れリスト <span class="bg-red-600 text-white text-xs px-2 py-1 rounded-full" x-text="alertList.length"></span>
+                    <span class="text-2xl">⚠️</span> 期限切迫・切れ <span class="bg-red-600 text-white text-xs px-2 py-1 rounded-full" x-text="alertList.length"></span>
                 </button>
                 <button @click="dashboardTab = 'idle'" :class="{'border-b-4 border-orange-500 text-orange-700 font-bold bg-orange-50': dashboardTab === 'idle', 'text-gray-500 hover:bg-gray-100': dashboardTab !== 'idle'}" class="px-2 py-4 w-1/2 flex items-center justify-center gap-2">
-                    <span class="text-2xl">📦</span> 低稼働・滞留リスト <span class="bg-orange-500 text-white text-xs px-2 py-1 rounded-full" x-text="idleList.length"></span>
+                    <span class="text-2xl">📦</span> 低稼働・滞留 <span class="bg-orange-500 text-white text-xs px-2 py-1 rounded-full" x-text="idleList.length"></span>
                 </button>
             </div>
             <div class="p-4 overflow-y-auto flex-1">
@@ -205,8 +274,8 @@
                     <table class="w-full bg-white rounded-lg shadow-sm border-collapse text-left whitespace-nowrap">
                         <thead class="bg-slate-200 sticky top-0 shadow-sm">
                             <tr>
-                                <th class="p-3 border-b border-gray-300 font-bold">科目</th>
-                                <th class="p-3 border-b border-gray-300 font-bold text-center">科の設定</th>
+                                <th class="p-3 border-b border-gray-300 font-bold">分類 / 科目</th>
+                                <th class="p-3 border-b border-gray-300 font-bold text-center">個別の設定</th>
                                 <th class="p-3 border-b border-gray-300 font-bold">場所</th>
                                 <th class="p-3 border-b border-gray-300 font-bold w-1/2">物品名</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">実際の期限</th>
@@ -216,9 +285,12 @@
                         <tbody>
                             <template x-for="item in alertList" :key="item.id">
                                 <tr class="hover:bg-red-50 border-b border-gray-100">
-                                    <td class="p-3 text-gray-700 font-medium" x-text="item.dept"></td>
+                                    <td class="p-3 text-gray-700 font-medium">
+                                        <span x-text="item.catName" class="text-xs text-gray-500 mr-1 block"></span>
+                                        <span x-text="item.dept"></span>
+                                    </td>
                                     <td class="p-3 text-center">
-                                        <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold" x-text="item.alertThreshold + 'ヶ月前基準'"></span>
+                                        <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold" x-text="item.alertThreshold + 'ヶ月前'"></span>
                                     </td>
                                     <td class="p-3 text-blue-800 font-bold" x-text="item.location"></td>
                                     <td class="p-3 text-gray-900 font-bold" x-text="item.name"></td>
@@ -237,7 +309,7 @@
                     <table class="w-full bg-white rounded-lg shadow-sm border-collapse text-left whitespace-nowrap">
                         <thead class="bg-slate-200 sticky top-0 shadow-sm">
                             <tr>
-                                <th class="p-3 border-b border-gray-300 font-bold">科目</th>
+                                <th class="p-3 border-b border-gray-300 font-bold">分類 / 科目</th>
                                 <th class="p-3 border-b border-gray-300 font-bold">場所</th>
                                 <th class="p-3 border-b border-gray-300 font-bold w-1/2">物品名</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">設定されている期限</th>
@@ -247,7 +319,10 @@
                         <tbody>
                             <template x-for="item in idleList" :key="item.id">
                                 <tr class="hover:bg-orange-50 border-b border-gray-100">
-                                    <td class="p-3 text-gray-700" x-text="item.dept"></td>
+                                    <td class="p-3 text-gray-700 font-medium">
+                                        <span x-text="item.catName" class="text-xs text-gray-500 mr-1 block"></span>
+                                        <span x-text="item.dept"></span>
+                                    </td>
                                     <td class="p-3 text-blue-800 font-bold" x-text="item.location"></td>
                                     <td class="p-3 text-gray-900 font-bold" x-text="item.name"></td>
                                     <td class="p-3 text-center font-bold text-gray-500" x-text="item.dueDate"></td>
@@ -285,7 +360,7 @@
                     <div class="text-center font-bold text-blue-600 mb-2">月 (Month)</div>
                     <div class="grid grid-cols-3 gap-2">
                         <template x-for="m in 12" :key="'m'+m">
-                            <button @click="selectMonth(m)" class="tap-btn h-12 rounded-xl text-xl font-bold shadow-sm" :class="selectedMonth === m ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-800 hover:bg-blue-100'" x-text="m"></button>
+                            <button @click="selectMonth(m)" class="tap-btn h-10 md:h-12 rounded-xl text-lg md:text-xl font-bold shadow-sm" :class="selectedMonth === m ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-800 hover:bg-blue-100'" x-text="m"></button>
                         </template>
                     </div>
                 </div>
@@ -293,31 +368,18 @@
                     <div class="text-center font-bold text-indigo-600 mb-2">日 (Day)</div>
                     <div class="grid grid-cols-7 gap-2">
                         <template x-for="d in 31" :key="'d'+d">
-                            <button @click="selectDay(d)" class="tap-btn h-10 rounded-xl text-lg font-bold shadow-sm" :class="selectedDay === d ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-800 hover:bg-indigo-100'" x-text="d"></button>
+                            <button @click="selectDay(d)" class="tap-btn h-8 md:h-10 rounded-xl text-base md:text-lg font-bold shadow-sm" :class="selectedDay === d ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-800 hover:bg-indigo-100'" x-text="d"></button>
                         </template>
                     </div>
                 </div>
             </div>
             
             <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2">
-                <button @click="closePadCancel()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl text-base shadow">
-                    キャンセル
-                </button>
-                
-                <button x-show="padTarget && padTarget.type === 'item'" @click="setArrow()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 border-2 border-blue-300 font-bold py-3 rounded-xl text-base shadow flex items-center justify-center gap-1.5">
-                    ➡ <span>(先月と同じ)</span>
-                </button>
-                <div x-show="padTarget && padTarget.type === 'check'" class="flex items-center justify-center text-xs font-bold text-gray-400">
-                    ※月・日で自動確定
-                </div>
-                
-                <button @click="clearSingleCell()" class="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 font-bold py-3 rounded-xl text-sm shadow">
-                    ✕ この月だけ消す
-                </button>
-                
-                <button @click="clearAllRightCells()" class="bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 font-bold py-3 rounded-xl text-sm shadow">
-                    🗑 右もまとめて消す
-                </button>
+                <button @click="closePadCancel()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl text-sm md:text-base shadow">キャンセル</button>
+                <button x-show="padTarget && padTarget.type === 'item'" @click="setArrow()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 border-2 border-blue-300 font-bold py-3 rounded-xl text-sm md:text-base shadow flex items-center justify-center gap-1.5">➡ <span>(先月と同)</span></button>
+                <div x-show="padTarget && padTarget.type === 'check'" class="flex items-center justify-center text-xs font-bold text-gray-400">※月・日で自動確定</div>
+                <button @click="clearSingleCell()" class="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 font-bold py-3 rounded-xl text-xs md:text-sm shadow">✕ この月だけ消す</button>
+                <button @click="clearAllRightCells()" class="bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 font-bold py-3 rounded-xl text-xs md:text-sm shadow">🗑 右もまとめて消す</button>
             </div>
         </div>
     </div>
@@ -327,14 +389,18 @@
             const months = [4,5,6,7,8,9,10,11,12,1,2,3];
 
             return {
+                isSetupComplete: false,
                 isDataLoaded: false,
                 isEditMode: false,
                 currentYear: 2026, 
-                departments: {},
+                
+                categories: { instruments: {}, consumables: {} },
+                activeCat: '',
                 activeTab: '',
-                checkDates: {}, 
-                inputs: {},
-                alertSettings: {},
+                
+                checkDates: { instruments: {}, consumables: {} }, 
+                inputs: { instruments: {}, consumables: {} },
+                itemAlerts: {},
                 
                 isDashboardOpen: false,
                 dashboardTab: 'alert',
@@ -349,11 +415,16 @@
                 calendarDate: '',
 
                 isAddModalOpen: false,
+                addModalCat: '',
                 addModalDept: '',
                 addModalName: '',
                 addModalLocation: '',
                 addModalNewLocation: '',
                 availableLocations: [],
+
+                isItemAlertModalOpen: false,
+                alertModalItem: null,
+                alertModalMonths: 1, // デフォルト1ヶ月
 
                 get displayMonths() {
                     let m = [];
@@ -365,47 +436,73 @@
                 formatMonthHeader(ym) { return parseInt(ym.split('-')[1], 10) + '月'; },
 
                 initApp() {
-                    const savedMaster = localStorage.getItem('op_master_data_v3');
-                    if (savedMaster) {
-                        this.departments = JSON.parse(savedMaster);
-                        this.activeTab = Object.keys(this.departments)[0];
-                        const savedChecksV3 = localStorage.getItem('op_check_dates_v3');
-                        const savedInputsV3 = localStorage.getItem('op_inputs_v3');
-                        const savedAlertSettings = localStorage.getItem('op_alert_settings_v3');
-                        
-                        this.checkDates = savedChecksV3 ? JSON.parse(savedChecksV3) : {};
-                        this.inputs = savedInputsV3 ? JSON.parse(savedInputsV3) : {};
-                        this.alertSettings = savedAlertSettings ? JSON.parse(savedAlertSettings) : {};
-                        
-                        this.ensureKeys();
-                        this.isDataLoaded = true;
+                    let v4Master = localStorage.getItem('op_master_data_v4');
+                    if (v4Master) {
+                        this.categories = JSON.parse(v4Master);
+                        this.inputs = JSON.parse(localStorage.getItem('op_inputs_v4') || '{"instruments":{},"consumables":{}}');
+                        this.checkDates = JSON.parse(localStorage.getItem('op_check_dates_v4') || '{"instruments":{},"consumables":{}}');
+                        this.itemAlerts = JSON.parse(localStorage.getItem('op_item_alerts_v4') || '{}');
+                        this.isSetupComplete = true;
                     }
-                    this.$watch('checkDates', val => localStorage.setItem('op_check_dates_v3', JSON.stringify(val)), { deep: true });
-                    this.$watch('inputs', val => localStorage.setItem('op_inputs_v3', JSON.stringify(val)), { deep: true });
+                    if (this.isSetupComplete) {
+                        this.setDefaultActiveTab();
+                        this.ensureKeys();
+                    }
+                    
+                    this.$watch('checkDates', val => localStorage.setItem('op_check_dates_v4', JSON.stringify(val)), { deep: true });
+                    this.$watch('inputs', val => localStorage.setItem('op_inputs_v4', JSON.stringify(val)), { deep: true });
+                    this.$watch('itemAlerts', val => localStorage.setItem('op_item_alerts_v4', JSON.stringify(val)), { deep: true });
                 },
                 
-                getAlertMonths(dept) { return this.alertSettings[dept] !== undefined ? this.alertSettings[dept] : 3; },
-                saveAlertSettings() { localStorage.setItem('op_alert_settings_v3', JSON.stringify(this.alertSettings)); },
+                // リセットボタンの処理（テスト用）
+                resetData() {
+                    if(confirm("※注意※\n読み込んだExcelデータや入力した期限・確認日がすべて消去され、初期状態に戻ります。\n本当によろしいですか？")) {
+                        localStorage.clear();
+                        location.reload();
+                    }
+                },
+
+                setDefaultActiveTab() {
+                    if (Object.keys(this.categories.instruments).length > 0) {
+                        this.activeCat = 'instruments';
+                        this.activeTab = Object.keys(this.categories.instruments)[0];
+                    } else if (Object.keys(this.categories.consumables).length > 0) {
+                        this.activeCat = 'consumables';
+                        this.activeTab = Object.keys(this.categories.consumables)[0];
+                    }
+                },
+
+                completeSetup() {
+                    this.isSetupComplete = true;
+                    this.setDefaultActiveTab();
+                    this.ensureKeys();
+                    this.saveMaster();
+                },
                 
                 ensureKeys() {
-                    this.displayMonths.forEach(ym => {
-                        for(let dept in this.departments) {
-                            if(!this.checkDates[dept]) this.checkDates[dept] = {};
-                            if(this.checkDates[dept][ym] === undefined) this.checkDates[dept][ym] = '';
-                            if(!this.inputs[dept]) this.inputs[dept] = {};
-                            if(this.alertSettings[dept] === undefined) this.alertSettings[dept] = 3;
-                            
-                            this.departments[dept].forEach(item => {
-                                if(!this.inputs[dept][item.id]) this.inputs[dept][item.id] = {};
-                                if(this.inputs[dept][item.id][ym] === undefined) this.inputs[dept][item.id][ym] = '';
-                            });
-                        }
+                    ['instruments', 'consumables'].forEach(cat => {
+                        this.displayMonths.forEach(ym => {
+                            for(let dept in this.categories[cat]) {
+                                if(!this.checkDates[cat]) this.checkDates[cat] = {};
+                                if(!this.checkDates[cat][dept]) this.checkDates[cat][dept] = {};
+                                if(this.checkDates[cat][dept][ym] === undefined) this.checkDates[cat][dept][ym] = '';
+                                
+                                if(!this.inputs[cat]) this.inputs[cat] = {};
+                                if(!this.inputs[cat][dept]) this.inputs[cat][dept] = {};
+                                
+                                this.categories[cat][dept].forEach(item => {
+                                    if(!this.inputs[cat][dept][item.id]) this.inputs[cat][dept][item.id] = {};
+                                    if(this.inputs[cat][dept][item.id][ym] === undefined) this.inputs[cat][dept][item.id][ym] = '';
+                                });
+                            }
+                        });
                     });
                 },
 
                 exportCurrentDeptToExcel() {
+                    const cat = this.activeCat;
                     const dept = this.activeTab;
-                    if (!dept || !this.departments[dept]) return;
+                    if (!cat || !dept || !this.categories[cat][dept]) return;
 
                     const wb = XLSX.utils.book_new();
                     const wsData = [];
@@ -415,40 +512,54 @@
                     wsData.push(headerRow);
                     
                     const checkRow = ['', '確認日'];
-                    this.displayMonths.forEach(ym => checkRow.push(this.checkDates[dept]?.[ym] || ''));
+                    this.displayMonths.forEach(ym => checkRow.push(this.checkDates[cat]?.[dept]?.[ym] || ''));
                     wsData.push(checkRow);
                     
-                    this.departments[dept].forEach(item => {
+                    this.categories[cat][dept].forEach(item => {
                         const row = [item.location, item.name];
                         this.displayMonths.forEach(ym => {
-                            row.push(this.inputs[dept]?.[item.id]?.[ym] || '');
+                            row.push(this.inputs[cat]?.[dept]?.[item.id]?.[ym] || '');
                         });
                         wsData.push(row);
                     });
                     
                     const ws = XLSX.utils.aoa_to_sheet(wsData);
+                    let prefix = cat === 'instruments' ? '器械_' : '消耗品_';
                     XLSX.utils.book_append_sheet(wb, ws, dept.substring(0, 30));
-                    XLSX.writeFile(wb, `${dept}_滅菌期限管理_${this.currentYear}年度.xlsx`);
+                    XLSX.writeFile(wb, `${prefix}${dept}_期限管理_${this.currentYear}年度.xlsx`);
                 },
 
                 changeYear(delta) { this.currentYear += delta; this.ensureKeys(); },
                 toggleEditMode() { this.isEditMode = !this.isEditMode; },
-                saveMaster() { localStorage.setItem('op_master_data_v3', JSON.stringify(this.departments)); },
+                saveMaster() { localStorage.setItem('op_master_data_v4', JSON.stringify(this.categories)); },
 
-                toggleCheckDate(dept, ym) {
+                openItemAlertModal(cat, dept, item) {
+                    this.alertModalItem = item;
+                    this.alertModalMonths = this.itemAlerts[item.id] || 1; // デフォルト1
+                    this.isItemAlertModalOpen = true;
+                },
+                saveItemAlert() {
+                    if (this.alertModalItem) {
+                        this.itemAlerts[this.alertModalItem.id] = this.alertModalMonths;
+                    }
+                    this.isItemAlertModalOpen = false;
+                },
+
+                toggleCheckDate(cat, dept, ym) {
                     if (this.isEditMode) return;
-                    if (!this.checkDates[dept][ym]) {
+                    if (!this.checkDates[cat][dept][ym]) {
                         let d = new Date();
-                        this.checkDates[dept][ym] = `${d.getMonth() + 1}/${d.getDate()}`;
+                        this.checkDates[cat][dept][ym] = `${d.getMonth() + 1}/${d.getDate()}`;
                     } else {
-                        this.openPad('check', dept, null, ym);
+                        this.openPad('check', cat, dept, null, ym);
                     }
                 },
 
-                openAddModal(dept) {
+                openAddModal(cat, dept) {
+                    this.addModalCat = cat;
                     this.addModalDept = dept;
                     this.addModalName = '';
-                    let locs = this.departments[dept].map(i => i.location);
+                    let locs = this.categories[cat][dept].map(i => i.location);
                     locs = [...new Set(locs)].filter(l => l && l !== '-').sort();
                     this.availableLocations = locs;
                     this.addModalLocation = locs.length > 0 ? locs[0] : 'new';
@@ -463,30 +574,31 @@
                     if (this.addModalLocation === 'new') loc = this.addModalNewLocation.trim();
                     else if (this.addModalLocation !== 'none') loc = this.addModalLocation;
                     
-                    let id = "manual_" + Date.now();
-                    let newItem = { id: id, location: loc, name: name };
+                    let id = (this.addModalCat === 'instruments' ? "inst_" : "cons_") + Date.now();
+                    let newItem = { id: id, location: loc, name: name, color: '' };
+                    let cat = this.addModalCat;
                     let dept = this.addModalDept;
                     
                     if (loc === "") {
-                        this.departments[dept].push(newItem);
+                        this.categories[cat][dept].push(newItem);
                     } else {
                         let insertIndex = -1;
-                        for (let i = this.departments[dept].length - 1; i >= 0; i--) {
-                            if (this.departments[dept][i].location === loc) { insertIndex = i; break; }
+                        for (let i = this.categories[cat][dept].length - 1; i >= 0; i--) {
+                            if (this.categories[cat][dept][i].location === loc) { insertIndex = i; break; }
                         }
-                        if (insertIndex !== -1) this.departments[dept].splice(insertIndex + 1, 0, newItem);
-                        else this.departments[dept].push(newItem);
+                        if (insertIndex !== -1) this.categories[cat][dept].splice(insertIndex + 1, 0, newItem);
+                        else this.categories[cat][dept].push(newItem);
                     }
                     this.ensureKeys();
                     this.saveMaster();
                     this.isAddModalOpen = false;
                 },
 
-                removeItem(dept, index) {
-                    if (confirm(`削除しますか？`)) { this.departments[dept].splice(index, 1); this.saveMaster(); }
+                removeItem(cat, dept, index) {
+                    if (confirm(`削除しますか？`)) { this.categories[cat][dept].splice(index, 1); this.saveMaster(); }
                 },
-                moveItem(dept, index, dir) {
-                    let arr = this.departments[dept];
+                moveItem(cat, dept, index, dir) {
+                    let arr = this.categories[cat][dept];
                     if (dir === -1 && index > 0) {
                         let temp = arr[index]; arr[index] = arr[index - 1]; arr[index - 1] = temp; this.saveMaster();
                     } else if (dir === 1 && index < arr.length - 1) {
@@ -494,51 +606,93 @@
                     }
                 },
 
-                handleFileUpload(event) {
+                // 🛠 クラッシュ回避強化版 色読み取りアップロード機能
+                async handleFileUpload(event, categoryKey) {
                     const file = event.target.files[0];
                     if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, {type: 'array'});
+                    
+                    try {
+                        const buffer = await file.arrayBuffer();
+                        const workbook = new ExcelJS.Workbook();
+                        await workbook.xlsx.load(buffer);
+                        
                         let extractedData = {};
-                        workbook.SheetNames.forEach(sheetName => {
-                            if (sheetName === '見本') return;
-                            const sheet = workbook.Sheets[sheetName];
-                            const json = XLSX.utils.sheet_to_json(sheet, {header: 1});
+                        let pfix = categoryKey === 'instruments' ? 'inst_' : 'cons_';
+                        
+                        workbook.worksheets.forEach(sheet => {
+                            if (sheet.name === '見本') return;
+                            
+                            let json = [];
+                            let colors = [];
+                            
+                            sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+                                let rIdx = rowNumber - 1;
+                                json[rIdx] = [];
+                                colors[rIdx] = [];
+                                row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                                    let cIdx = colNumber - 1;
+                                    json[rIdx][cIdx] = cell.text ? String(cell.text).trim() : '';
+                                    
+                                    // ⚠️ エラー回避のための安全な色抽出ロジック
+                                    let bgColor = '';
+                                    try {
+                                        if (cell.fill && cell.fill.type === 'pattern' && cell.fill.fgColor) {
+                                            // ARGB（例: FFFF0000）が存在し、8文字の場合のみ処理する
+                                            if (cell.fill.fgColor.argb && typeof cell.fill.fgColor.argb === 'string' && cell.fill.fgColor.argb.length === 8) {
+                                                bgColor = '#' + cell.fill.fgColor.argb.substring(2);
+                                                if (cell.fill.fgColor.argb.substring(0, 2) === '00') bgColor = ''; // 透明回避
+                                            } 
+                                            // もしtheme（テーマカラー）指定されていた場合でもクラッシュさせず空欄（白）にする
+                                            else if (cell.fill.fgColor.theme !== undefined) {
+                                                bgColor = ''; 
+                                            }
+                                        }
+                                    } catch (e) {
+                                        // もし色取得で何らかのエラーが起きても無視して進める
+                                        bgColor = '';
+                                    }
+                                    colors[rIdx][cIdx] = bgColor;
+                                });
+                            });
+                            
                             let locCol = -1, itemCol = -1, startRow = -1;
                             for (let r = 0; r < Math.min(10, json.length); r++) {
-                                for (let c = 0; c < Math.min(5, json[r]?.length || 0); c++) {
-                                    if (String(json[r][c] || '').trim() === '場所') {
+                                if (!json[r]) continue;
+                                for (let c = 0; c < Math.min(5, json[r].length || 0); c++) {
+                                    if (json[r][c] === '場所') {
                                         locCol = c;
                                         for (let nextC = c + 1; nextC < Math.min(c + 4, json[r].length); nextC++) {
-                                            if (String(json[r][nextC] || '').trim()) { itemCol = nextC; break; }
+                                            if (json[r][nextC]) { itemCol = nextC; break; }
                                         }
                                         if (itemCol !== -1) { startRow = r + 1; break; }
                                     }
                                 }
                                 if (locCol !== -1 && itemCol !== -1) break;
                             }
+                            
                             let items = [];
                             let currentLoc = "";
                             const noise = ["滅菌期限", "～", "/", "まで", "期限の切れ", "管理者へ", "月", "日", "確認日"];
                             const exactNoise = ['商品名', '器械名/セット名', '器械名', 'セット名', '物品名', '薬品名', '場所'];
+                            
                             if (locCol !== -1 && itemCol !== -1) {
                                 for (let r = startRow; r < json.length; r++) {
-                                    if(!json[r]) continue;
-                                    let locVal = String(json[r][locCol] || '').trim();
-                                    let itemVal = String(json[r][itemCol] || '').trim();
+                                    if (!json[r]) continue;
+                                    let locVal = json[r][locCol];
+                                    let itemVal = json[r][itemCol];
+                                    let itemColor = colors[r] && colors[r][itemCol] ? colors[r][itemCol] : '';
+                                    
                                     if (locVal && locVal !== 'undefined') currentLoc = locVal.replace(/\n/g, ' ');
                                     if (itemVal && itemVal !== 'undefined') {
                                         if (noise.some(n => itemVal.includes(n)) || exactNoise.includes(itemVal) || !isNaN(itemVal) || itemVal.length < 2 || itemVal.includes('チェックリスト')) continue;
-                                        items.push({ id: currentLoc + '_' + itemVal + '_' + r, location: currentLoc, name: itemVal });
+                                        items.push({ id: pfix + currentLoc + '_' + itemVal + '_' + r, location: currentLoc, name: itemVal, color: itemColor });
                                     }
                                 }
                             } else {
                                 let bestCol = -1, maxItems = 0;
                                 for (let colIdx = 0; colIdx < 4; colIdx++) {
                                     let colData = [];
-                                    for (let r = 0; r < json.length; r++) { if (json[r] && json[r][colIdx]) colData.push(String(json[r][colIdx]).trim()); }
+                                    for (let r = 0; r < json.length; r++) { if (json[r] && json[r][colIdx]) colData.push(json[r][colIdx]); }
                                     let cleaned = colData.filter(x => {
                                         if(!x || !isNaN(x) || x.length < 2 || x.includes('チェックリスト')) return false;
                                         for(let n of noise) if(x.includes(n)) return false;
@@ -549,43 +703,47 @@
                                 if (bestCol !== -1) {
                                     let seen = new Set();
                                     for (let r = 0; r < json.length; r++) {
-                                        let itemVal = String(json[r]?.[bestCol] || '').trim();
+                                        if (!json[r]) continue;
+                                        let itemVal = json[r][bestCol];
+                                        let itemColor = colors[r] && colors[r][bestCol] ? colors[r][bestCol] : '';
+                                        
                                         if (itemVal && itemVal !== 'undefined' && !exactNoise.includes(itemVal) && !noise.some(n => itemVal.includes(n)) && isNaN(itemVal) && itemVal.length >= 2 && !itemVal.includes('チェックリスト')) {
-                                            if (!seen.has(itemVal)) { seen.add(itemVal); items.push({ id: 'none_' + itemVal + '_' + r, location: '-', name: itemVal }); }
+                                            if (!seen.has(itemVal)) { 
+                                                seen.add(itemVal); 
+                                                items.push({ id: pfix + 'none_' + itemVal + '_' + r, location: '-', name: itemVal, color: itemColor }); 
+                                            }
                                         }
                                     }
                                 }
                             }
-                            if (items.length > 0) extractedData[sheetName] = items;
+                            if (items.length > 0) extractedData[sheet.name] = items;
                         });
-                        this.departments = extractedData;
-                        this.activeTab = Object.keys(this.departments)[0];
+                        
+                        this.categories[categoryKey] = extractedData;
                         this.currentYear = new Date().getFullYear();
                         if (new Date().getMonth() < 3) this.currentYear--; 
-                        this.checkDates = {};
-                        this.inputs = {};
                         this.ensureKeys();
-                        localStorage.setItem('op_master_data_v3', JSON.stringify(this.departments));
-                        this.isDataLoaded = true;
-                    };
-                    reader.readAsArrayBuffer(file);
+                        this.saveMaster();
+                        event.target.value = ''; 
+                        
+                    } catch (error) {
+                        console.error('Excel読み込みエラー:', error);
+                        alert('Excelファイルの読み込み中にエラーが発生しました。\nファイルの形式を確認してください。');
+                    }
                 },
 
                 saveAndAutoFill(value) {
+                    const cat = this.padTarget.cat;
                     const dept = this.padTarget.dept;
                     const ym = this.padTarget.month; 
                     
                     if (this.padTarget.type === 'check') {
-                        this.checkDates[dept][ym] = value;
-                        this.isPadOpen = false;
+                        this.checkDates[cat][dept][ym] = value;
                     } else {
                         const itemId = this.padTarget.item.id;
-                        this.inputs[dept][itemId][ym] = value;
+                        this.inputs[cat][dept][itemId][ym] = value;
                         
-                        let shouldAutoFill = false;
-                        if (value === '➡' || value === '→') {
-                            // 何もしない（単一入力）
-                        } else if (value === '') {
+                        if (value === '➡' || value === '→' || value === '') {
                             // 何もしない
                         } else {
                             const [cy, cm] = ym.split('-');
@@ -598,9 +756,9 @@
                                 let startFill = false;
                                 for (let m of this.displayMonths) {
                                     if (startFill) {
-                                        let cellVal = this.inputs[dept][itemId][m];
+                                        let cellVal = this.inputs[cat][dept][itemId][m];
                                         if (cellVal !== '' && cellVal !== '➡' && cellVal !== '→') break;
-                                        this.inputs[dept][itemId][m] = '➡';
+                                        this.inputs[cat][dept][itemId][m] = '➡';
                                     }
                                     if (m === ym) startFill = true;
                                 }
@@ -608,9 +766,9 @@
                                 let startClear = false;
                                 for (let m of this.displayMonths) {
                                     if (startClear) {
-                                        let cellVal = this.inputs[dept][itemId][m];
+                                        let cellVal = this.inputs[cat][dept][itemId][m];
                                         if (cellVal === '➡' || cellVal === '→') {
-                                            this.inputs[dept][itemId][m] = '';
+                                            this.inputs[cat][dept][itemId][m] = '';
                                         } else if (cellVal !== '') {
                                             break; 
                                         }
@@ -619,16 +777,16 @@
                                 }
                             }
                         }
-                        this.isPadOpen = false;
                     }
+                    this.isPadOpen = false;
                 },
 
-                openPad(type, dept, itemObj, ym) {
+                openPad(type, cat, dept, itemObj, ym) {
                     if (this.isEditMode) return;
-                    this.padTarget = { type, dept, item: itemObj, month: ym }; 
+                    this.padTarget = { type, cat, dept, item: itemObj, month: ym }; 
                     this.padTitle = type === 'check' ? `[確認日] ${this.formatMonthHeader(ym)} の設定` : `[${this.formatMonthHeader(ym)}期限] ${itemObj.name}`;
                     
-                    let currentVal = type === 'check' ? this.checkDates[dept][ym] : this.inputs[dept][itemObj.id][ym];
+                    let currentVal = type === 'check' ? this.checkDates[cat][dept][ym] : this.inputs[cat][dept][itemObj.id][ym];
                     this.calendarDate = ''; 
                     
                     if (currentVal === '➡' || currentVal === '→') {
@@ -665,39 +823,41 @@
                     }
                 },
                 
-                // ここを変更：矢印入力は単一セルのみにする
                 setArrow() { 
+                    const cat = this.padTarget.cat;
                     const dept = this.padTarget.dept;
                     const ym = this.padTarget.month;
-                    this.inputs[dept][this.padTarget.item.id][ym] = '➡';
+                    this.inputs[cat][dept][this.padTarget.item.id][ym] = '➡';
                     this.isPadOpen = false;
                 },
                 
                 clearSingleCell() {
+                    const cat = this.padTarget.cat;
                     const dept = this.padTarget.dept;
                     const ym = this.padTarget.month;
                     if (this.padTarget.type === 'check') {
-                        this.checkDates[dept][ym] = '';
+                        this.checkDates[cat][dept][ym] = '';
                     } else {
-                        this.inputs[dept][this.padTarget.item.id][ym] = '';
+                        this.inputs[cat][dept][this.padTarget.item.id][ym] = '';
                     }
                     this.isPadOpen = false;
                 },
 
                 clearAllRightCells() {
+                    const cat = this.padTarget.cat;
                     const dept = this.padTarget.dept;
                     const ym = this.padTarget.month;
                     if (this.padTarget.type === 'check') {
-                        this.checkDates[dept][ym] = '';
+                        this.checkDates[cat][dept][ym] = '';
                     } else {
                         const itemId = this.padTarget.item.id;
-                        this.inputs[dept][itemId][ym] = '';
+                        this.inputs[cat][dept][itemId][ym] = '';
                         let startClear = false;
                         for (let m of this.displayMonths) {
                             if (startClear) {
-                                let cellVal = this.inputs[dept][itemId][m];
+                                let cellVal = this.inputs[cat][dept][itemId][m];
                                 if (cellVal === '➡' || cellVal === '→') {
-                                    this.inputs[dept][itemId][m] = '';
+                                    this.inputs[cat][dept][itemId][m] = '';
                                 } else if (cellVal !== '') {
                                     break;
                                 }
@@ -715,24 +875,24 @@
                 },
                 closePadCancel() { this.isPadOpen = false; },
 
-                getAbsoluteDueDate(dept, itemId, ym) {
-                    let val = this.inputs[dept]?.[itemId]?.[ym];
+                getAbsoluteDueDate(cat, dept, itemId, ym) {
+                    let val = this.inputs[cat]?.[dept]?.[itemId]?.[ym];
                     if (!val) return null;
                     let targetYM = ym;
                     let actualStr = val;
                     if (val === '→' || val === '➡') {
                         actualStr = null;
-                        let allKeys = Object.keys(this.inputs[dept]?.[itemId] || {}).sort();
+                        let allKeys = Object.keys(this.inputs[cat]?.[dept]?.[itemId] || {}).sort();
                         let idx = allKeys.indexOf(ym);
                         for (let i = idx - 1; i >= 0; i--) {
-                            let prevVal = this.inputs[dept][itemId][allKeys[i]];
+                            let prevVal = this.inputs[cat][dept][itemId][allKeys[i]];
                             if (prevVal && prevVal !== '→' && prevVal !== '➡') {
                                 actualStr = prevVal; targetYM = allKeys[i]; break;
                             }
                         }
                     }
                     if (!actualStr) return null;
-                    const checkStr = this.checkDates[dept]?.[targetYM];
+                    const checkStr = this.checkDates[cat]?.[dept]?.[targetYM];
                     const [ty, tm] = targetYM.split('-');
                     const baseDate = new Date(parseInt(ty), parseInt(tm) - 1, 1);
                     const checkDate = this.parseSmartDate(checkStr, baseDate) || baseDate;
@@ -754,9 +914,9 @@
                     return new Date(y, m, d);
                 },
 
-                isAlert(dept, itemId, ym) {
-                    if(!this.checkDates[dept] || !this.inputs[dept] || !this.inputs[dept][itemId]) return false;
-                    const checkStr = this.checkDates[dept][ym];
+                isAlert(cat, dept, itemId, ym) {
+                    if(!this.checkDates[cat]?.[dept] || !this.inputs[cat]?.[dept]?.[itemId]) return false;
+                    const checkStr = this.checkDates[cat][dept][ym];
                     if (!checkStr) return false;
                     
                     const [cy, cm] = ym.split('-');
@@ -764,30 +924,30 @@
                     const checkDate = this.parseSmartDate(checkStr, columnBaseDate);
                     if (!checkDate) return false;
                     
-                    const dueDate = this.getAbsoluteDueDate(dept, itemId, ym);
+                    const dueDate = this.getAbsoluteDueDate(cat, dept, itemId, ym);
                     if (!dueDate) return false;
 
-                    const threshold = this.getAlertMonths(dept); 
+                    const threshold = this.itemAlerts[itemId] || 1; // 💡 デフォルト1ヶ月
                     const alertDate = new Date(dueDate);
                     alertDate.setMonth(alertDate.getMonth() - threshold);
                     return alertDate <= checkDate;
                 },
 
-                isChronologicalError(dept, itemId, ym) {
-                    const currentDate = this.getAbsoluteDueDate(dept, itemId, ym);
+                isChronologicalError(cat, dept, itemId, ym) {
+                    const currentDate = this.getAbsoluteDueDate(cat, dept, itemId, ym);
                     if (!currentDate) return false;
-                    let currentVal = this.inputs[dept][itemId][ym];
+                    let currentVal = this.inputs[cat][dept][itemId][ym];
                     if (currentVal === '→' || currentVal === '➡') return false; 
                     
-                    const allKeys = Object.keys(this.inputs[dept]?.[itemId] || {}).sort();
+                    const allKeys = Object.keys(this.inputs[cat]?.[dept]?.[itemId] || {}).sort();
                     const idx = allKeys.indexOf(ym);
                     if (idx <= 0) return false; 
                     
                     for (let i = idx - 1; i >= 0; i--) {
                         let prevYM = allKeys[i];
-                        let prevVal = this.inputs[dept][itemId][prevYM];
+                        let prevVal = this.inputs[cat][dept][itemId][prevYM];
                         if (prevVal) {
-                            let prevDate = this.getAbsoluteDueDate(dept, itemId, prevYM);
+                            let prevDate = this.getAbsoluteDueDate(cat, dept, itemId, prevYM);
                             if (prevDate && currentDate < prevDate) return true;
                             break; 
                         }
@@ -802,62 +962,67 @@
                     const today = new Date();
                     today.setHours(0,0,0,0);
                     
-                    for(let dept in this.departments) {
-                        const threshold = this.getAlertMonths(dept); 
-                        const deptLimitDate = new Date(today);
-                        deptLimitDate.setMonth(today.getMonth() + threshold);
+                    ['instruments', 'consumables'].forEach(cat => {
+                        let catName = cat === 'instruments' ? '🛠 器械' : '🩹 消耗品';
                         
-                        for(let itemObj of this.departments[dept]) {
-                            const itemId = itemObj.id;
-                            const itemInputs = this.inputs[dept]?.[itemId] || {};
-                            const allYMs = Object.keys(itemInputs).sort();
-                            if(allYMs.length === 0) continue;
-                            
-                            let latestYM = null;
-                            for(let i = allYMs.length - 1; i >= 0; i--) {
-                                if(itemInputs[allYMs[i]]) { latestYM = allYMs[i]; break; }
-                            }
-                            if(!latestYM) continue;
-                            
-                            const dueDateObj = this.getAbsoluteDueDate(dept, itemId, latestYM);
-                            if(!dueDateObj) continue;
-                            
-                            let y = dueDateObj.getFullYear();
-                            let m = dueDateObj.getMonth() + 1;
-                            let d = dueDateObj.getDate();
-                            let displayDate = `${y}/${m}/${d}`;
-                            
-                            if(dueDateObj <= deptLimitDate) {
-                                this.alertList.push({
-                                    id: itemId + '_alert', 
-                                    dept: dept, 
-                                    alertThreshold: threshold, 
-                                    location: itemObj.location, 
-                                    name: itemObj.name,
-                                    dueDate: displayDate, 
-                                    isExpired: dueDateObj < today
-                                });
-                            }
-                            
-                            let originYM = latestYM;
-                            for(let i = allYMs.length - 1; i >= 0; i--) {
-                                let val = itemInputs[allYMs[i]];
-                                if (val && val !== '→' && val !== '➡') { originYM = allYMs[i]; break; }
-                            }
-                            
-                            const [oy, om] = originYM.split('-');
-                            let ty = today.getFullYear();
-                            let tm = today.getMonth() + 1;
-                            let idleMonths = (ty - parseInt(oy)) * 12 + (tm - parseInt(om));
-                            
-                            if(idleMonths >= 12) {
-                                this.idleList.push({
-                                    id: itemId + '_idle', dept: dept, location: itemObj.location, name: itemObj.name,
-                                    dueDate: displayDate, idleMonths: idleMonths
-                                });
+                        for(let dept in this.categories[cat]) {
+                            for(let itemObj of this.categories[cat][dept]) {
+                                const threshold = this.itemAlerts[itemObj.id] || 1; // 💡 デフォルト1ヶ月
+                                const limitDate = new Date(today);
+                                limitDate.setMonth(today.getMonth() + threshold);
+                                
+                                const itemId = itemObj.id;
+                                const itemInputs = this.inputs[cat]?.[dept]?.[itemId] || {};
+                                const allYMs = Object.keys(itemInputs).sort();
+                                if(allYMs.length === 0) continue;
+                                
+                                let latestYM = null;
+                                for(let i = allYMs.length - 1; i >= 0; i--) {
+                                    if(itemInputs[allYMs[i]]) { latestYM = allYMs[i]; break; }
+                                }
+                                if(!latestYM) continue;
+                                
+                                const dueDateObj = this.getAbsoluteDueDate(cat, dept, itemId, latestYM);
+                                if(!dueDateObj) continue;
+                                
+                                let y = dueDateObj.getFullYear();
+                                let m = dueDateObj.getMonth() + 1;
+                                let d = dueDateObj.getDate();
+                                let displayDate = `${y}/${m}/${d}`;
+                                
+                                if(dueDateObj <= limitDate) {
+                                    this.alertList.push({
+                                        id: itemId + '_alert', 
+                                        catName: catName,
+                                        dept: dept, 
+                                        alertThreshold: threshold, 
+                                        location: itemObj.location, 
+                                        name: itemObj.name,
+                                        dueDate: displayDate, 
+                                        isExpired: dueDateObj < today
+                                    });
+                                }
+                                
+                                let originYM = latestYM;
+                                for(let i = allYMs.length - 1; i >= 0; i--) {
+                                    let val = itemInputs[allYMs[i]];
+                                    if (val && val !== '→' && val !== '➡') { originYM = allYMs[i]; break; }
+                                }
+                                
+                                const [oy, om] = originYM.split('-');
+                                let ty = today.getFullYear();
+                                let tm = today.getMonth() + 1;
+                                let idleMonths = (ty - parseInt(oy)) * 12 + (tm - parseInt(om));
+                                
+                                if(idleMonths >= 12) {
+                                    this.idleList.push({
+                                        id: itemId + '_idle', catName: catName, dept: dept, location: itemObj.location, name: itemObj.name,
+                                        dueDate: displayDate, idleMonths: idleMonths
+                                    });
+                                }
                             }
                         }
-                    }
+                    });
                     
                     this.alertList.sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
                     this.idleList.sort((a,b) => b.idleMonths - a.idleMonths);

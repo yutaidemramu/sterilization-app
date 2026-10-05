@@ -39,27 +39,34 @@
         
         <div class="bg-blue-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4 flex-shrink-0">
             <h1 class="text-xl md:text-2xl font-bold">🏥 OP室 期限管理 (器械/消耗品)</h1>
-            <div class="flex gap-2 flex-wrap justify-center items-center">
-                <button @click="exportCurrentDeptToExcel()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
+            
+            <!-- 💡 セットアップ完了時のみボタン群を表示 -->
+            <div class="flex gap-2 flex-wrap justify-center items-center" x-show="isSetupComplete" style="display: none;">
+                <button @click="exportCurrentDeptToExcel()" class="text-sm md:text-base font-bold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
                     📥 Excel出力
                 </button>
-                <button @click="openDashboard()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
+                <button @click="openDashboard()" class="text-sm md:text-base font-bold bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
                     📊 全体集計
                 </button>
                 
-                <!-- 🛠 編集モード＆戻す（Undo）ボタン -->
-                <div x-show="isSetupComplete" class="flex items-center gap-1 bg-indigo-800 p-1 rounded-lg shadow-inner">
+                <!-- 🛠 編集モード＆戻す（Undo）ボタンのグループ -->
+                <div class="flex items-center gap-1 bg-indigo-800 p-1 rounded-lg shadow-inner">
                     <button @click="toggleEditMode()" class="text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-md shadow-md transition-colors">
                         <span x-text="isEditMode ? '✅ 編集完了' : '🛠 編集'"></span>
                     </button>
-                    <!-- 履歴がある時のみ「戻す」ボタンを表示 -->
-                    <button @click="undo()" x-show="isEditMode && history.length > 0" class="text-sm md:text-base font-bold bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-md shadow-md transition-colors flex items-center gap-1" title="直前の操作を取り消す">
+                    
+                    <!-- 💡 編集モードの時だけ出現する「戻す」ボタン -->
+                    <button @click="undo()" 
+                            x-show="isEditMode" style="display: none;"
+                            :disabled="history.length === 0"
+                            :class="history.length > 0 ? 'bg-pink-600 hover:bg-pink-500 text-white shadow-md' : 'bg-gray-400 text-gray-200 cursor-not-allowed'"
+                            class="text-sm md:text-base font-bold px-3 py-2 rounded-md transition-colors flex items-center gap-1" title="直前の操作を取り消す">
                         ↩️ 戻す
                     </button>
                 </div>
 
-                <button @click="resetData()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded shadow-md bg-opacity-50 hover:bg-opacity-100 transition-opacity ml-4" title="すべてのデータを消去して初期画面に戻る">
-                    リセット
+                <button @click="resetData()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded shadow-md opacity-70 hover:opacity-100 transition-opacity ml-2" title="すべてのデータを消去して初期画面に戻る">
+                    全データ初期化
                 </button>
             </div>
         </div>
@@ -135,7 +142,7 @@
 
             <div class="p-2 bg-yellow-50 text-xs md:text-sm text-gray-800 border-b border-gray-200 shadow-sm flex items-center gap-2 flex-shrink-0">
                 <span class="text-lg">💡</span> 
-                <p><strong>⚙️マーク</strong>で物品ごとにアラート月数（標準1ヶ月前）を変更可能。<strong>編集中に間違えたら「戻す」ボタンが使えます。</strong></p>
+                <p><strong>「🛠編集」</strong>を押すと「戻す」ボタンが使えます。<strong>⚙️マーク</strong>で物品ごとのアラート月数（標準1ヶ月）を変更可能。</p>
             </div>
 
             <div class="table-container p-1 flex-1">
@@ -165,6 +172,7 @@
                             <tr class="hover:bg-blue-50 transition-colors" :class="{'bg-green-50': isEditMode}">
                                 <td class="border border-gray-300 p-2 font-bold text-blue-900 sticky-col-1 whitespace-normal break-words align-middle" x-text="item.location"></td>
                                 
+                                <!-- 色指定反映部分 -->
                                 <td class="border border-gray-300 p-2 font-medium text-left sticky-col-2"
                                     :style="item.color ? `background-color: ${item.color};` : 'background-color: #ffffff;'"
                                     :class="item.color ? 'text-black font-bold border-gray-400' : 'text-gray-800'">
@@ -175,7 +183,7 @@
                                             <button @click.stop="openItemAlertModal(activeCat, activeTab, item)" class="text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0 bg-white bg-opacity-70 rounded-full px-1" title="個別アラート設定">⚙️</button>
                                             
                                             <span x-show="itemAlerts[item.id] && itemAlerts[item.id] !== 1" 
-                                                  class="text-xs md:text-sm bg-red-100 text-red-700 px-2 py-1 rounded border border-red-200 font-bold flex-shrink-0 shadow-sm" 
+                                                  class="text-[10px] md:text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded border border-red-200 font-bold flex-shrink-0 shadow-sm" 
                                                   x-text="itemAlerts[item.id] + 'ヶ月前'"></span>
                                         </div>
 
@@ -266,11 +274,10 @@
                 <label class="block text-sm font-bold text-gray-700 mb-1">セルの背景色（任意）</label>
                 <div class="flex items-center gap-4 bg-gray-50 p-3 rounded-lg border border-gray-200 transition-colors" :class="useColor ? 'bg-blue-50 border-blue-200' : ''">
                     <label class="flex items-center gap-2 cursor-pointer font-bold text-gray-700 select-none">
-                        <input type="checkbox" x-model="useColor" class="w-5 h-5 cursor-pointer">
+                        <input type="checkbox" x-model="useColor" class="w-5 h-5 cursor-pointer text-blue-600 rounded">
                         色を指定する
                     </label>
-                    <!-- カラーピッカー -->
-                    <input type="color" x-show="useColor" x-model="addModalColor" class="w-16 h-10 cursor-pointer border-0 rounded bg-transparent p-0">
+                    <input type="color" x-show="useColor" x-model="addModalColor" class="w-16 h-10 cursor-pointer border-0 rounded bg-transparent p-0 shadow-sm">
                 </div>
             </div>
 
@@ -452,8 +459,8 @@
                 addModalNewLocation: '',
                 availableLocations: [],
                 
-                // 🎨 色追加機能用の状態
-                addModalColor: '#ffcccc', // デフォルトの色
+                // 🎨 色追加機能用
+                addModalColor: '#fca5a5', // デフォルト（薄い赤）
                 useColor: false,
 
                 isItemAlertModalOpen: false,
@@ -497,7 +504,7 @@
 
                 // 🛠 操作を戻すための履歴保存メソッド
                 saveStateForUndo() {
-                    if (this.history.length >= 10) this.history.shift(); // 最大10回分まで保存
+                    if (this.history.length >= 10) this.history.shift(); 
                     this.history.push(JSON.parse(JSON.stringify(this.categories)));
                 },
 
@@ -626,8 +633,7 @@
                     this.addModalDept = dept;
                     this.addModalName = '';
                     
-                    // 追加時の色を初期化
-                    this.addModalColor = '#ffcccc';
+                    this.addModalColor = '#fca5a5';
                     this.useColor = false;
                     
                     let locs = this.categories[cat][dept].map(i => i.location);
@@ -645,11 +651,11 @@
                     if (this.addModalLocation === 'new') loc = this.addModalNewLocation.trim();
                     else if (this.addModalLocation !== 'none') loc = this.addModalLocation;
                     
-                    this.saveStateForUndo(); // 🛠 変更前に状態を保存
+                    this.saveStateForUndo(); // 🛠 追加前に履歴を保存
 
                     let id = (this.addModalCat === 'instruments' ? "inst_" : "cons_") + Date.now();
                     
-                    // 🎨 色が指定されていれば取得、なければ空白
+                    // 🎨 色が指定されていれば取得
                     let itemColor = this.useColor ? this.addModalColor : '';
                     let newItem = { id: id, location: loc, name: name, color: itemColor };
                     
@@ -673,7 +679,7 @@
 
                 removeItem(cat, dept, index) {
                     if (confirm(`削除しますか？`)) { 
-                        this.saveStateForUndo(); // 🛠 変更前に状態を保存
+                        this.saveStateForUndo(); // 🛠 削除前に履歴を保存
                         this.categories[cat][dept].splice(index, 1); 
                         this.saveMaster(); 
                     }
@@ -682,10 +688,10 @@
                 moveItem(cat, dept, index, dir) {
                     let arr = this.categories[cat][dept];
                     if (dir === -1 && index > 0) {
-                        this.saveStateForUndo(); // 🛠 変更前に状態を保存
+                        this.saveStateForUndo(); // 🛠 移動前に履歴を保存
                         let temp = arr[index]; arr[index] = arr[index - 1]; arr[index - 1] = temp; this.saveMaster();
                     } else if (dir === 1 && index < arr.length - 1) {
-                        this.saveStateForUndo(); // 🛠 変更前に状態を保存
+                        this.saveStateForUndo(); // 🛠 移動前に履歴を保存
                         let temp = arr[index]; arr[index] = arr[index + 1]; arr[index + 1] = temp; this.saveMaster();
                     }
                 },

@@ -6,8 +6,8 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     
-    <title>OP室 滅菌期限管理（オフライン完全対応版）</title>
-    <!-- オフラインでも100%確実に読み込める安定版のCSSファイルに変更 -->
+    <title>OP室 滅菌期限管理（Undo対応・色指定版）</title>
+    <!-- オフライン安定版CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -28,7 +28,7 @@
 
         .tap-btn { transition: all 0.1s ease-out; }
         .tap-btn:active { transform: scale(0.9); filter: brightness(0.9); }
-        input[type="date"], select { cursor: pointer; }
+        input[type="date"], input[type="color"], select { cursor: pointer; }
         
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
@@ -46,15 +46,25 @@
                 <button @click="openDashboard()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
                     📊 全体集計
                 </button>
-                <button @click="toggleEditMode()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors">
-                    <span x-text="isEditMode ? '✅ 編集完了' : '🛠 編集'"></span>
-                </button>
+                
+                <!-- 🛠 編集モード＆戻す（Undo）ボタン -->
+                <div x-show="isSetupComplete" class="flex items-center gap-1 bg-indigo-800 p-1 rounded-lg shadow-inner">
+                    <button @click="toggleEditMode()" class="text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-md shadow-md transition-colors">
+                        <span x-text="isEditMode ? '✅ 編集完了' : '🛠 編集'"></span>
+                    </button>
+                    <!-- 履歴がある時のみ「戻す」ボタンを表示 -->
+                    <button @click="undo()" x-show="isEditMode && history.length > 0" class="text-sm md:text-base font-bold bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-md shadow-md transition-colors flex items-center gap-1" title="直前の操作を取り消す">
+                        ↩️ 戻す
+                    </button>
+                </div>
+
                 <button @click="resetData()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded shadow-md bg-opacity-50 hover:bg-opacity-100 transition-opacity ml-4" title="すべてのデータを消去して初期画面に戻る">
                     リセット
                 </button>
             </div>
         </div>
 
+        <!-- 初期セットアップ画面 -->
         <div x-show="!isSetupComplete" class="p-6 md:p-10 flex flex-col items-center justify-center flex-1 text-center bg-white overflow-y-auto">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">🔧 初期セットアップ</h2>
             <p class="text-gray-500 mb-8 max-w-2xl">必要なExcelファイルを読み込んでください。（片方だけでも開始できます）</p>
@@ -125,7 +135,7 @@
 
             <div class="p-2 bg-yellow-50 text-xs md:text-sm text-gray-800 border-b border-gray-200 shadow-sm flex items-center gap-2 flex-shrink-0">
                 <span class="text-lg">💡</span> 
-                <p><strong>⚙️マーク</strong>で物品ごとにアラート月数（標準1ヶ月前）を変更可能。確認日は空欄タップで「本日」を自動入力。</p>
+                <p><strong>⚙️マーク</strong>で物品ごとにアラート月数（標準1ヶ月前）を変更可能。<strong>編集中に間違えたら「戻す」ボタンが使えます。</strong></p>
             </div>
 
             <div class="table-container p-1 flex-1">
@@ -170,9 +180,9 @@
                                         </div>
 
                                         <div x-show="isEditMode" class="flex gap-1 flex-shrink-0" style="display: none;">
-                                            <button @click.stop="moveItem(activeCat, activeTab, index, -1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded" :disabled="index === 0">↑</button>
-                                            <button @click.stop="moveItem(activeCat, activeTab, index, 1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded" :disabled="index === categories[activeCat][activeTab].length - 1">↓</button>
-                                            <button @click.stop="removeItem(activeCat, activeTab, index)" class="bg-red-500 text-white px-1 py-1 rounded">✖</button>
+                                            <button @click.stop="moveItem(activeCat, activeTab, index, -1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded hover:bg-gray-300" :disabled="index === 0" title="上に移動">↑</button>
+                                            <button @click.stop="moveItem(activeCat, activeTab, index, 1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded hover:bg-gray-300" :disabled="index === categories[activeCat][activeTab].length - 1" title="下に移動">↓</button>
+                                            <button @click.stop="removeItem(activeCat, activeTab, index)" class="bg-red-500 hover:bg-red-600 text-white px-1 py-1 rounded" title="削除">✖</button>
                                         </div>
                                     </div>
                                 </td>
@@ -231,9 +241,9 @@
         </div>
     </div>
 
-    <!-- ➕ 追加モーダル -->
+    <!-- ➕ 追加モーダル（色指定機能追加！） -->
     <div x-show="isAddModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isAddModalOpen = false">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform transition-all flex flex-col gap-5">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform transition-all flex flex-col gap-4">
             <h2 class="text-xl md:text-2xl font-bold text-blue-900 border-b-2 border-blue-100 pb-2"><span x-text="addModalDept"></span> への追加</h2>
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">物品名 <span class="text-red-500">*</span></label>
@@ -250,7 +260,21 @@
                 </select>
                 <input type="text" x-show="addModalLocation === 'new'" x-model="addModalNewLocation" class="w-full border-2 border-yellow-300 rounded-lg p-3 text-lg bg-yellow-50 focus:border-yellow-500 focus:outline-none" placeholder="新しい場所名を入力">
             </div>
-            <div class="flex justify-end gap-3 mt-2">
+            
+            <!-- 🎨 色を指定する機能 -->
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">セルの背景色（任意）</label>
+                <div class="flex items-center gap-4 bg-gray-50 p-3 rounded-lg border border-gray-200 transition-colors" :class="useColor ? 'bg-blue-50 border-blue-200' : ''">
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-gray-700 select-none">
+                        <input type="checkbox" x-model="useColor" class="w-5 h-5 cursor-pointer">
+                        色を指定する
+                    </label>
+                    <!-- カラーピッカー -->
+                    <input type="color" x-show="useColor" x-model="addModalColor" class="w-16 h-10 cursor-pointer border-0 rounded bg-transparent p-0">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-4">
                 <button @click="isAddModalOpen = false" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-xl shadow">キャンセル</button>
                 <button @click="confirmAddItem()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg">追加する</button>
             </div>
@@ -405,6 +429,9 @@
                 inputs: { instruments: {}, consumables: {} },
                 itemAlerts: {},
                 
+                // 🛠 Undo（戻す）機能用の履歴配列
+                history: [],
+                
                 isDashboardOpen: false,
                 dashboardTab: 'alert',
                 alertList: [],
@@ -424,6 +451,10 @@
                 addModalLocation: '',
                 addModalNewLocation: '',
                 availableLocations: [],
+                
+                // 🎨 色追加機能用の状態
+                addModalColor: '#ffcccc', // デフォルトの色
+                useColor: false,
 
                 isItemAlertModalOpen: false,
                 alertModalItem: null,
@@ -462,6 +493,20 @@
                         localStorage.clear();
                         location.reload();
                     }
+                },
+
+                // 🛠 操作を戻すための履歴保存メソッド
+                saveStateForUndo() {
+                    if (this.history.length >= 10) this.history.shift(); // 最大10回分まで保存
+                    this.history.push(JSON.parse(JSON.stringify(this.categories)));
+                },
+
+                // 🛠 元に戻すメソッド
+                undo() {
+                    if (this.history.length === 0) return;
+                    const previousState = this.history.pop();
+                    this.categories = previousState;
+                    this.saveMaster();
                 },
 
                 switchTab(cat, dept) {
@@ -538,7 +583,13 @@
                 },
 
                 changeYear(delta) { this.currentYear += delta; this.ensureKeys(); },
-                toggleEditMode() { this.isEditMode = !this.isEditMode; },
+                
+                toggleEditMode() { 
+                    this.isEditMode = !this.isEditMode; 
+                    if (!this.isEditMode) {
+                        this.history = []; // 編集モード終了時に履歴をリセット
+                    }
+                },
                 
                 saveMaster() { 
                     try {
@@ -574,6 +625,11 @@
                     this.addModalCat = cat;
                     this.addModalDept = dept;
                     this.addModalName = '';
+                    
+                    // 追加時の色を初期化
+                    this.addModalColor = '#ffcccc';
+                    this.useColor = false;
+                    
                     let locs = this.categories[cat][dept].map(i => i.location);
                     locs = [...new Set(locs)].filter(l => l && l !== '-').sort();
                     this.availableLocations = locs;
@@ -589,8 +645,14 @@
                     if (this.addModalLocation === 'new') loc = this.addModalNewLocation.trim();
                     else if (this.addModalLocation !== 'none') loc = this.addModalLocation;
                     
+                    this.saveStateForUndo(); // 🛠 変更前に状態を保存
+
                     let id = (this.addModalCat === 'instruments' ? "inst_" : "cons_") + Date.now();
-                    let newItem = { id: id, location: loc, name: name, color: '' };
+                    
+                    // 🎨 色が指定されていれば取得、なければ空白
+                    let itemColor = this.useColor ? this.addModalColor : '';
+                    let newItem = { id: id, location: loc, name: name, color: itemColor };
+                    
                     let cat = this.addModalCat;
                     let dept = this.addModalDept;
                     
@@ -610,18 +672,24 @@
                 },
 
                 removeItem(cat, dept, index) {
-                    if (confirm(`削除しますか？`)) { this.categories[cat][dept].splice(index, 1); this.saveMaster(); }
+                    if (confirm(`削除しますか？`)) { 
+                        this.saveStateForUndo(); // 🛠 変更前に状態を保存
+                        this.categories[cat][dept].splice(index, 1); 
+                        this.saveMaster(); 
+                    }
                 },
+                
                 moveItem(cat, dept, index, dir) {
                     let arr = this.categories[cat][dept];
                     if (dir === -1 && index > 0) {
+                        this.saveStateForUndo(); // 🛠 変更前に状態を保存
                         let temp = arr[index]; arr[index] = arr[index - 1]; arr[index - 1] = temp; this.saveMaster();
                     } else if (dir === 1 && index < arr.length - 1) {
+                        this.saveStateForUndo(); // 🛠 変更前に状態を保存
                         let temp = arr[index]; arr[index] = arr[index + 1]; arr[index + 1] = temp; this.saveMaster();
                     }
                 },
 
-                // 🛠 クラッシュ完全防止のハイブリッドエンジン（ピンポイント色抽出）
                 async handleFileUpload(event, categoryKey) {
                     const file = event.target.files[0];
                     if (!file) return;
@@ -629,18 +697,16 @@
                     try {
                         const buffer = await file.arrayBuffer();
                         
-                        // 1. 【超安定】SheetJSでテキストと構造を絶対に読み込む
                         const data = new Uint8Array(buffer);
                         const workbook = XLSX.read(data, {type: 'array'});
                         
                         let extractedData = {};
                         let pfix = categoryKey === 'instruments' ? 'inst_' : 'cons_';
                         
-                        // 2. 【オプション】ExcelJSで色だけ抽出するための準備
                         let exceljsWb = null;
                         try {
                             exceljsWb = new ExcelJS.Workbook();
-                            await exceljsWb.xlsx.load(buffer.slice(0)); // バッファをコピーして安全に渡す
+                            await exceljsWb.xlsx.load(buffer.slice(0)); 
                         } catch (err) {
                             console.warn("色情報の読み取りをスキップしました(ファイル形式が古いため):", err);
                         }
@@ -680,13 +746,12 @@
                                     if (itemVal && itemVal !== 'undefined') {
                                         if (noise.some(n => itemVal.includes(n)) || exactNoise.includes(itemVal) || !isNaN(itemVal) || itemVal.length < 2 || itemVal.includes('チェックリスト')) continue;
                                         
-                                        // 🎨 ピンポイント色抽出
                                         let itemColor = '';
                                         if (exceljsWb) {
                                             try {
                                                 const eSheet = exceljsWb.getWorksheet(sheetName);
                                                 if (eSheet) {
-                                                    const cell = eSheet.getRow(r + 1).getCell(itemCol + 1); // 1-indexed
+                                                    const cell = eSheet.getRow(r + 1).getCell(itemCol + 1); 
                                                     if (cell.fill && cell.fill.type === 'pattern' && cell.fill.fgColor) {
                                                         if (cell.fill.fgColor.argb && cell.fill.fgColor.argb.length === 8) {
                                                             itemColor = '#' + cell.fill.fgColor.argb.substring(2);
@@ -722,7 +787,6 @@
                                             if (!seen.has(itemVal)) { 
                                                 seen.add(itemVal); 
                                                 
-                                                // 🎨 ピンポイント色抽出
                                                 let itemColor = '';
                                                 if (exceljsWb) {
                                                     try {
@@ -749,7 +813,6 @@
                         });
                         
                         this.categories[categoryKey] = extractedData;
-                        // 💡 読み込んだデータをすぐに表示させる（迷子防止）
                         this.activeCat = categoryKey;
                         this.activeTab = Object.keys(extractedData)[0];
                         

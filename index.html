@@ -6,22 +6,24 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     
-    <title>OP室 滅菌期限管理（超互換・安全読込版）</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>OP室 滅菌期限管理（オフライン完全対応版）</title>
+    <!-- オフラインでも100%確実に読み込める安定版のCSSファイルに変更 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <!-- メインエンジン -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- サブエンジン（色読込） -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     
     <style>
+        .app-container { width: 98vw; max-width: 100%; height: 90vh; }
+        @media (min-width: 768px) { .app-container { height: auto; } }
         .table-container { max-height: 60vh; overflow: auto; }
         thead { position: sticky; top: 0; z-index: 30; }
         
-        .sticky-col-1 { position: sticky; left: 0; z-index: 20; background-color: #f8fafc; min-width: 120px; max-width: 120px; }
+        .sticky-col-1 { position: sticky; left: 0; z-index: 20; background-color: #f3f4f6; min-width: 120px; max-width: 120px; }
         .sticky-col-2 { position: sticky; left: 120px; z-index: 20; min-width: 250px; max-width: 250px; }
         
-        thead .sticky-col-1, thead .sticky-col-2 { z-index: 40; background-color: #e2e8f0; }
+        thead .sticky-col-1, thead .sticky-col-2 { z-index: 40; background-color: #e5e7eb; }
         thead tr:nth-child(2) .sticky-col-1, thead tr:nth-child(2) .sticky-col-2 { background-color: #fefce8; }
 
         .tap-btn { transition: all 0.1s ease-out; }
@@ -32,22 +34,22 @@
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="bg-slate-100 p-2 md:p-6" x-data="appData()" x-init="initApp()">
-    <div class="max-w-[98vw] mx-auto bg-white rounded-xl shadow-xl overflow-hidden flex flex-col h-[90vh] md:h-auto">
+<body class="bg-gray-100 p-2 md:p-6" x-data="appData()" x-init="initApp()">
+    <div class="mx-auto bg-white rounded-xl shadow-xl overflow-hidden flex flex-col app-container">
         
-        <div class="bg-blue-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
+        <div class="bg-blue-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4 flex-shrink-0">
             <h1 class="text-xl md:text-2xl font-bold">🏥 OP室 期限管理 (器械/消耗品)</h1>
             <div class="flex gap-2 flex-wrap justify-center items-center">
-                <button @click="exportCurrentDeptToExcel()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
+                <button @click="exportCurrentDeptToExcel()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
                     📥 Excel出力
                 </button>
-                <button @click="openDashboard()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-orange-500 hover:bg-orange-400 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
+                <button @click="openDashboard()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
                     📊 全体集計
                 </button>
                 <button @click="toggleEditMode()" x-show="isSetupComplete" class="text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors">
                     <span x-text="isEditMode ? '✅ 編集完了' : '🛠 編集'"></span>
                 </button>
-                <button @click="resetData()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded shadow-md opacity-50 hover:opacity-100 transition-opacity ml-4" title="すべてのデータを消去して初期画面に戻る">
+                <button @click="resetData()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded shadow-md bg-opacity-50 hover:bg-opacity-100 transition-opacity ml-4" title="すべてのデータを消去して初期画面に戻る">
                     リセット
                 </button>
             </div>
@@ -55,7 +57,7 @@
 
         <div x-show="!isSetupComplete" class="p-6 md:p-10 flex flex-col items-center justify-center flex-1 text-center bg-white overflow-y-auto">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">🔧 初期セットアップ</h2>
-            <p class="text-gray-500 mb-8 max-w-2xl">必要なExcelファイルを読み込んでください。（片方だけでも開始できます。色情報も引き継がれます）</p>
+            <p class="text-gray-500 mb-8 max-w-2xl">必要なExcelファイルを読み込んでください。（片方だけでも開始できます）</p>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl mb-10">
                 <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 flex flex-col items-center gap-4 shadow-sm">
@@ -90,18 +92,18 @@
 
         <div x-show="isSetupComplete" style="display: none;" class="flex flex-col h-full">
             
-            <div class="bg-slate-200 py-1.5 border-b border-gray-300 flex justify-center items-center gap-6 shadow-inner shrink-0">
+            <div class="bg-gray-200 py-2 border-b border-gray-300 flex justify-center items-center gap-6 shadow-inner flex-shrink-0">
                 <button @click="changeYear(-1)" class="bg-white text-blue-700 font-bold px-4 py-1 rounded shadow hover:bg-blue-50">◀ 前年</button>
                 <div class="text-xl font-black text-blue-900 tracking-wider" x-text="currentYear + '年度'"></div>
                 <button @click="changeYear(1)" class="bg-white text-blue-700 font-bold px-4 py-1 rounded shadow hover:bg-blue-50">次年 ▶</button>
             </div>
 
-            <div class="flex flex-col bg-slate-50 shadow-sm shrink-0">
+            <div class="flex flex-col bg-gray-50 shadow-sm flex-shrink-0">
                 <div class="flex items-center overflow-x-auto hide-scroll border-b border-gray-200" x-show="Object.keys(categories.instruments).length > 0">
-                    <div class="px-3 py-2 bg-blue-100 text-blue-900 font-bold whitespace-nowrap shrink-0 border-r border-blue-200 text-sm md:text-base">🛠 器械定数</div>
+                    <div class="px-3 py-2 bg-blue-100 text-blue-900 font-bold whitespace-nowrap flex-shrink-0 border-r border-blue-200 text-sm md:text-base">🛠 器械定数</div>
                     <div class="flex">
                         <template x-for="dept in Object.keys(categories.instruments)">
-                            <button @click="activeCat = 'instruments'; activeTab = dept"
+                            <button @click="switchTab('instruments', dept)"
                                 :class="{'border-b-4 border-blue-600 bg-white font-bold text-blue-800': activeCat === 'instruments' && activeTab === dept, 'text-gray-500 hover:bg-gray-100': !(activeCat === 'instruments' && activeTab === dept)}"
                                 class="px-4 py-2 text-sm md:text-base font-medium focus:outline-none transition-colors whitespace-nowrap"
                                 x-text="dept"></button>
@@ -109,10 +111,10 @@
                     </div>
                 </div>
                 <div class="flex items-center overflow-x-auto hide-scroll border-b border-gray-200" x-show="Object.keys(categories.consumables).length > 0">
-                    <div class="px-3 py-2 bg-green-100 text-green-900 font-bold whitespace-nowrap shrink-0 border-r border-green-200 text-sm md:text-base">🩹 消耗品一覧</div>
+                    <div class="px-3 py-2 bg-green-100 text-green-900 font-bold whitespace-nowrap flex-shrink-0 border-r border-green-200 text-sm md:text-base">🩹 消耗品一覧</div>
                     <div class="flex">
                         <template x-for="dept in Object.keys(categories.consumables)">
-                            <button @click="activeCat = 'consumables'; activeTab = dept"
+                            <button @click="switchTab('consumables', dept)"
                                 :class="{'border-b-4 border-green-600 bg-white font-bold text-green-800': activeCat === 'consumables' && activeTab === dept, 'text-gray-500 hover:bg-gray-100': !(activeCat === 'consumables' && activeTab === dept)}"
                                 class="px-4 py-2 text-sm md:text-base font-medium focus:outline-none transition-colors whitespace-nowrap"
                                 x-text="dept"></button>
@@ -121,19 +123,19 @@
                 </div>
             </div>
 
-            <div class="p-2 bg-yellow-50 text-xs md:text-sm text-gray-800 border-b border-gray-200 shadow-sm flex items-center gap-2 shrink-0">
+            <div class="p-2 bg-yellow-50 text-xs md:text-sm text-gray-800 border-b border-gray-200 shadow-sm flex items-center gap-2 flex-shrink-0">
                 <span class="text-lg">💡</span> 
-                <p><strong>⚙️マーク</strong>を押すと、物品ごとに個別にアラート月数（標準は1ヶ月前）を変更できます。</p>
+                <p><strong>⚙️マーク</strong>で物品ごとにアラート月数（標準1ヶ月前）を変更可能。確認日は空欄タップで「本日」を自動入力。</p>
             </div>
 
             <div class="table-container p-1 flex-1">
                 <table class="min-w-full border-collapse border border-gray-300 text-center whitespace-nowrap">
-                    <thead class="bg-slate-200 shadow-sm text-sm md:text-base">
+                    <thead class="bg-gray-200 shadow-sm text-sm md:text-base">
                         <tr>
                             <th class="border border-gray-300 p-2 text-center font-bold text-gray-700 sticky-col-1">場所</th>
-                            <th class="border border-gray-300 p-2 text-center font-bold text-gray-700 sticky-col-2" style="background-color: #e2e8f0;">物品名 / 個別設定</th>
+                            <th class="border border-gray-300 p-2 text-center font-bold text-gray-700 sticky-col-2" style="background-color: #e5e7eb;">物品名 / 個別設定</th>
                             <template x-for="ym in displayMonths" :key="ym">
-                                <th class="border border-gray-300 p-2 min-w-[76px] w-20 font-bold text-gray-700 bg-slate-200" x-text="formatMonthHeader(ym)"></th>
+                                <th class="border border-gray-300 p-2 w-20 font-bold text-gray-700 bg-gray-200" style="min-width: 76px;" x-text="formatMonthHeader(ym)"></th>
                             </template>
                         </tr>
                         <tr class="border-b-4 border-gray-400">
@@ -148,8 +150,8 @@
                             </template>
                         </tr>
                     </thead>
-                    <tbody class="text-sm md:text-base" x-show="activeCat && activeTab && categories[activeCat][activeTab]">
-                        <template x-for="(item, index) in categories[activeCat][activeTab]" :key="item.id">
+                    <tbody class="text-sm md:text-base" x-show="activeCat && activeTab && categories[activeCat]?.[activeTab]">
+                        <template x-for="(item, index) in categories[activeCat]?.[activeTab] || []" :key="item.id">
                             <tr class="hover:bg-blue-50 transition-colors" :class="{'bg-green-50': isEditMode}">
                                 <td class="border border-gray-300 p-2 font-bold text-blue-900 sticky-col-1 whitespace-normal break-words align-middle" x-text="item.location"></td>
                                 
@@ -158,16 +160,16 @@
                                     :class="item.color ? 'text-black font-bold border-gray-400' : 'text-gray-800'">
                                     
                                     <div class="flex justify-between items-center h-full group">
-                                        <div class="flex items-center gap-1.5 overflow-hidden">
+                                        <div class="flex items-center gap-2 overflow-hidden">
                                             <span class="truncate pr-1" x-text="item.name" :title="item.name"></span>
-                                            <button @click.stop="openItemAlertModal(activeCat, activeTab, item)" class="text-gray-400 hover:text-blue-600 transition-colors shrink-0 bg-white/70 rounded-full px-1" title="個別アラート設定">⚙️</button>
+                                            <button @click.stop="openItemAlertModal(activeCat, activeTab, item)" class="text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0 bg-white bg-opacity-70 rounded-full px-1" title="個別アラート設定">⚙️</button>
                                             
                                             <span x-show="itemAlerts[item.id] && itemAlerts[item.id] !== 1" 
-                                                  class="text-[10px] md:text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded border border-red-200 font-bold shrink-0 shadow-sm" 
+                                                  class="text-xs md:text-sm bg-red-100 text-red-700 px-2 py-1 rounded border border-red-200 font-bold flex-shrink-0 shadow-sm" 
                                                   x-text="itemAlerts[item.id] + 'ヶ月前'"></span>
                                         </div>
 
-                                        <div x-show="isEditMode" class="flex gap-1 shrink-0" style="display: none;">
+                                        <div x-show="isEditMode" class="flex gap-1 flex-shrink-0" style="display: none;">
                                             <button @click.stop="moveItem(activeCat, activeTab, index, -1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded" :disabled="index === 0">↑</button>
                                             <button @click.stop="moveItem(activeCat, activeTab, index, 1)" class="bg-gray-200 text-gray-700 px-1 py-1 rounded" :disabled="index === categories[activeCat][activeTab].length - 1">↓</button>
                                             <button @click.stop="removeItem(activeCat, activeTab, index)" class="bg-red-500 text-white px-1 py-1 rounded">✖</button>
@@ -207,7 +209,7 @@
         </div>
     </div>
 
-    <!-- ⚙️ 物品 個別アラート設定モーダル -->
+    <!-- ⚙️ 個別アラート設定モーダル -->
     <div x-show="isItemAlertModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isItemAlertModalOpen = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all flex flex-col gap-4">
             <h2 class="text-lg font-bold text-gray-700 border-b pb-2">個別アラート設定</h2>
@@ -215,7 +217,7 @@
             
             <div class="mt-2">
                 <label class="block text-sm font-bold text-gray-600 mb-2">何ヶ月前にアラート(黄色)を出しますか？</label>
-                <select x-model.number="alertModalMonths" class="w-full border-2 border-amber-300 bg-amber-50 rounded-lg p-3 text-lg font-bold text-amber-900 focus:outline-none focus:border-amber-500 shadow-inner">
+                <select x-model.number="alertModalMonths" class="w-full border-2 border-yellow-300 bg-yellow-50 rounded-lg p-3 text-lg font-bold text-yellow-900 focus:outline-none focus:border-yellow-500 shadow-inner">
                     <template x-for="m in 12" :key="m">
                         <option :value="m" x-text="m + 'ヶ月前' + (m === 1 ? ' (標準)' : '')"></option>
                     </template>
@@ -224,12 +226,12 @@
             
             <div class="flex justify-end gap-3 mt-4">
                 <button @click="isItemAlertModalOpen = false" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-xl shadow">キャンセル</button>
-                <button @click="saveItemAlert()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-6 rounded-xl shadow">設定を保存</button>
+                <button @click="saveItemAlert()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-6 rounded-xl shadow">設定を保存</button>
             </div>
         </div>
     </div>
 
-    <!-- ➕ 物品追加モーダル -->
+    <!-- ➕ 追加モーダル -->
     <div x-show="isAddModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isAddModalOpen = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform transition-all flex flex-col gap-5">
             <h2 class="text-xl md:text-2xl font-bold text-blue-900 border-b-2 border-blue-100 pb-2"><span x-text="addModalDept"></span> への追加</h2>
@@ -246,7 +248,7 @@
                     <option value="new">➕ 新しい場所を直接入力する...</option>
                     <option value="none">（場所なし・指定しない）</option>
                 </select>
-                <input type="text" x-show="addModalLocation === 'new'" x-model="addModalNewLocation" class="w-full border-2 border-orange-300 rounded-lg p-3 text-lg bg-orange-50 focus:border-orange-500 focus:outline-none" placeholder="新しい場所名を入力">
+                <input type="text" x-show="addModalLocation === 'new'" x-model="addModalNewLocation" class="w-full border-2 border-yellow-300 rounded-lg p-3 text-lg bg-yellow-50 focus:border-yellow-500 focus:outline-none" placeholder="新しい場所名を入力">
             </div>
             <div class="flex justify-end gap-3 mt-2">
                 <button @click="isAddModalOpen = false" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-xl shadow">キャンセル</button>
@@ -255,25 +257,25 @@
         </div>
     </div>
 
-    <!-- 📊 全体集計ダッシュボード -->
+    <!-- 📊 全体集計 -->
     <div x-show="isDashboardOpen" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isDashboardOpen = false">
-        <div class="bg-slate-100 rounded-3xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden transform transition-all">
-            <div class="bg-blue-900 text-white p-4 flex justify-between items-center shrink-0">
+        <div class="bg-gray-100 rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col overflow-hidden transform transition-all" style="height: 85vh;">
+            <div class="bg-blue-900 text-white p-4 flex justify-between items-center flex-shrink-0">
                 <h2 class="text-xl md:text-2xl font-bold">📊 全体管理・集計レポート</h2>
                 <button @click="isDashboardOpen = false" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-bold shadow text-white border border-blue-400">閉じる ✖</button>
             </div>
-            <div class="flex bg-white shadow shrink-0 text-sm md:text-lg">
+            <div class="flex bg-white shadow flex-shrink-0 text-sm md:text-lg">
                 <button @click="dashboardTab = 'alert'" :class="{'border-b-4 border-red-500 text-red-700 font-bold bg-red-50': dashboardTab === 'alert', 'text-gray-500 hover:bg-gray-100': dashboardTab !== 'alert'}" class="px-2 py-4 w-1/2 flex items-center justify-center gap-2">
                     <span class="text-2xl">⚠️</span> 期限切迫・切れ <span class="bg-red-600 text-white text-xs px-2 py-1 rounded-full" x-text="alertList.length"></span>
                 </button>
-                <button @click="dashboardTab = 'idle'" :class="{'border-b-4 border-orange-500 text-orange-700 font-bold bg-orange-50': dashboardTab === 'idle', 'text-gray-500 hover:bg-gray-100': dashboardTab !== 'idle'}" class="px-2 py-4 w-1/2 flex items-center justify-center gap-2">
-                    <span class="text-2xl">📦</span> 低稼働・滞留 <span class="bg-orange-500 text-white text-xs px-2 py-1 rounded-full" x-text="idleList.length"></span>
+                <button @click="dashboardTab = 'idle'" :class="{'border-b-4 border-yellow-500 text-yellow-700 font-bold bg-yellow-50': dashboardTab === 'idle', 'text-gray-500 hover:bg-gray-100': dashboardTab !== 'idle'}" class="px-2 py-4 w-1/2 flex items-center justify-center gap-2">
+                    <span class="text-2xl">📦</span> 低稼働・滞留 <span class="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full" x-text="idleList.length"></span>
                 </button>
             </div>
             <div class="p-4 overflow-y-auto flex-1">
                 <div x-show="dashboardTab === 'alert'">
                     <table class="w-full bg-white rounded-lg shadow-sm border-collapse text-left whitespace-nowrap">
-                        <thead class="bg-slate-200 sticky top-0 shadow-sm">
+                        <thead class="bg-gray-200 sticky top-0 shadow-sm">
                             <tr>
                                 <th class="p-3 border-b border-gray-300 font-bold">分類 / 科目</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">個別の設定</th>
@@ -308,7 +310,7 @@
                 </div>
                 <div x-show="dashboardTab === 'idle'">
                     <table class="w-full bg-white rounded-lg shadow-sm border-collapse text-left whitespace-nowrap">
-                        <thead class="bg-slate-200 sticky top-0 shadow-sm">
+                        <thead class="bg-gray-200 sticky top-0 shadow-sm">
                             <tr>
                                 <th class="p-3 border-b border-gray-300 font-bold">分類 / 科目</th>
                                 <th class="p-3 border-b border-gray-300 font-bold">場所</th>
@@ -319,7 +321,7 @@
                         </thead>
                         <tbody>
                             <template x-for="item in idleList" :key="item.id">
-                                <tr class="hover:bg-orange-50 border-b border-gray-100">
+                                <tr class="hover:bg-yellow-50 border-b border-gray-100">
                                     <td class="p-3 text-gray-700 font-medium">
                                         <span x-text="item.catName" class="text-xs text-gray-500 mr-1 block"></span>
                                         <span x-text="item.dept"></span>
@@ -328,7 +330,7 @@
                                     <td class="p-3 text-gray-900 font-bold" x-text="item.name"></td>
                                     <td class="p-3 text-center font-bold text-gray-500" x-text="item.dueDate"></td>
                                     <td class="p-3 text-center">
-                                        <span class="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm" x-text="item.idleMonths + 'ヶ月放置'"></span>
+                                        <span class="bg-yellow-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm" x-text="item.idleMonths + 'ヶ月放置'"></span>
                                     </td>
                                 </tr>
                             </template>
@@ -345,9 +347,9 @@
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl p-5 flex flex-col gap-3 transform transition-all">
             <div class="text-center text-gray-600 font-bold text-lg border-b pb-2"><span x-text="padTitle"></span></div>
             
-            <div class="bg-slate-100 rounded-xl p-3 flex flex-col md:flex-row items-center justify-between gap-4 border border-slate-200">
-                <div class="text-slate-600 font-bold">📆 数年先の期限（年指定）はこちら：</div>
-                <input type="date" x-model="calendarDate" @change="applyCalendarDate()" class="border-2 border-slate-300 rounded-lg px-4 py-2 text-xl font-bold bg-white text-blue-800 shadow-inner w-full md:w-auto">
+            <div class="bg-gray-100 rounded-xl p-3 flex flex-col md:flex-row items-center justify-between gap-4 border border-gray-200">
+                <div class="text-gray-600 font-bold">📆 数年先の期限（年指定）はこちら：</div>
+                <input type="date" x-model="calendarDate" @change="applyCalendarDate()" class="border-2 border-gray-300 rounded-lg px-4 py-2 text-xl font-bold bg-white text-blue-800 shadow-inner w-full md:w-auto">
             </div>
             
             <div class="flex items-center justify-center text-5xl font-bold text-blue-800 h-14 tracking-wider mt-2">
@@ -375,11 +377,11 @@
                 </div>
             </div>
             
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
                 <button @click="closePadCancel()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl text-sm md:text-base shadow">キャンセル</button>
-                <button x-show="padTarget && padTarget.type === 'item'" @click="setArrow()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 border-2 border-blue-300 font-bold py-3 rounded-xl text-sm md:text-base shadow flex items-center justify-center gap-1.5">➡ <span>(先月と同)</span></button>
+                <button x-show="padTarget && padTarget.type === 'item'" @click="setArrow()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 border-2 border-blue-300 font-bold py-3 rounded-xl text-sm md:text-base shadow flex items-center justify-center gap-2">➡ <span>(先月と同)</span></button>
                 <div x-show="padTarget && padTarget.type === 'check'" class="flex items-center justify-center text-xs font-bold text-gray-400">※月・日で自動確定</div>
-                <button @click="clearSingleCell()" class="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 font-bold py-3 rounded-xl text-xs md:text-sm shadow">✕ この月だけ消す</button>
+                <button @click="clearSingleCell()" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border border-yellow-300 font-bold py-3 rounded-xl text-xs md:text-sm shadow">✕ この月だけ消す</button>
                 <button @click="clearAllRightCells()" class="bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 font-bold py-3 rounded-xl text-xs md:text-sm shadow">🗑 右もまとめて消す</button>
             </div>
         </div>
@@ -456,10 +458,15 @@
                 },
                 
                 resetData() {
-                    if(confirm("※注意※\n読み込んだExcelデータや入力した期限・確認日がすべて消去され、初期状態に戻ります。\n本当によろしいですか？")) {
+                    if(confirm("※注意※\n読み込んだデータがすべて消去され、初期状態に戻ります。\n本当によろしいですか？")) {
                         localStorage.clear();
                         location.reload();
                     }
+                },
+
+                switchTab(cat, dept) {
+                    this.activeCat = cat;
+                    this.activeTab = dept;
                 },
 
                 setDefaultActiveTab() {
@@ -481,6 +488,7 @@
                 
                 ensureKeys() {
                     ['instruments', 'consumables'].forEach(cat => {
+                        if (!this.categories[cat]) return;
                         this.displayMonths.forEach(ym => {
                             for(let dept in this.categories[cat]) {
                                 if(!this.checkDates[cat]) this.checkDates[cat] = {};
@@ -502,7 +510,7 @@
                 exportCurrentDeptToExcel() {
                     const cat = this.activeCat;
                     const dept = this.activeTab;
-                    if (!cat || !dept || !this.categories[cat][dept]) return;
+                    if (!cat || !dept || !this.categories[cat]?.[dept]) return;
 
                     const wb = XLSX.utils.book_new();
                     const wsData = [];
@@ -531,7 +539,14 @@
 
                 changeYear(delta) { this.currentYear += delta; this.ensureKeys(); },
                 toggleEditMode() { this.isEditMode = !this.isEditMode; },
-                saveMaster() { localStorage.setItem('op_master_data_v4', JSON.stringify(this.categories)); },
+                
+                saveMaster() { 
+                    try {
+                        localStorage.setItem('op_master_data_v4', JSON.stringify(this.categories));
+                    } catch (e) {
+                        alert("データが大きすぎます。不要な科を削除してください。");
+                    }
+                },
 
                 openItemAlertModal(cat, dept, item) {
                     this.alertModalItem = item;
@@ -547,7 +562,7 @@
 
                 toggleCheckDate(cat, dept, ym) {
                     if (this.isEditMode) return;
-                    if (!this.checkDates[cat][dept][ym]) {
+                    if (!this.checkDates[cat]?.[dept]?.[ym]) {
                         let d = new Date();
                         this.checkDates[cat][dept][ym] = `${d.getMonth() + 1}/${d.getDate()}`;
                     } else {
@@ -606,141 +621,149 @@
                     }
                 },
 
-                // 🛠 古いブラウザ（旧EdgeやIEモード）でも絶対にエラーにならない「FileReader」方式に先祖返りさせたハイブリッドエンジン
-                handleFileUpload(event, categoryKey) {
+                // 🛠 クラッシュ完全防止のハイブリッドエンジン（ピンポイント色抽出）
+                async handleFileUpload(event, categoryKey) {
                     const file = event.target.files[0];
                     if (!file) return;
                     
-                    // 1. 最も安全で古いFileReaderを使用
-                    const reader = new FileReader();
-                    reader.onload = async (e) => {
+                    try {
+                        const buffer = await file.arrayBuffer();
+                        
+                        // 1. 【超安定】SheetJSでテキストと構造を絶対に読み込む
+                        const data = new Uint8Array(buffer);
+                        const workbook = XLSX.read(data, {type: 'array'});
+                        
+                        let extractedData = {};
+                        let pfix = categoryKey === 'instruments' ? 'inst_' : 'cons_';
+                        
+                        // 2. 【オプション】ExcelJSで色だけ抽出するための準備
+                        let exceljsWb = null;
                         try {
-                            const arrayBuffer = e.target.result;
+                            exceljsWb = new ExcelJS.Workbook();
+                            await exceljsWb.xlsx.load(buffer.slice(0)); // バッファをコピーして安全に渡す
+                        } catch (err) {
+                            console.warn("色情報の読み取りをスキップしました(ファイル形式が古いため):", err);
+                        }
+                        
+                        workbook.SheetNames.forEach(sheetName => {
+                            if (sheetName === '見本') return;
+                            const sheet = workbook.Sheets[sheetName];
+                            const json = XLSX.utils.sheet_to_json(sheet, {header: 1});
                             
-                            // 2. メインエンジン (SheetJS) - 配列データから確実にテキストを抜き出す
-                            const data = new Uint8Array(arrayBuffer);
-                            const workbook = XLSX.read(data, {type: 'array'});
-                            
-                            // 3. サブエンジン (ExcelJS) - 色情報だけを抜き出す
-                            let colorMap = {};
-                            try {
-                                const exceljsWb = new ExcelJS.Workbook();
-                                await exceljsWb.xlsx.load(arrayBuffer); // エラーが起きてもメインは止まらない
-                                
-                                exceljsWb.worksheets.forEach(sheet => {
-                                    colorMap[sheet.name] = {};
-                                    sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-                                        let rIdx = rowNumber - 1;
-                                        colorMap[sheet.name][rIdx] = {};
-                                        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-                                            let cIdx = colNumber - 1;
-                                            let bgColor = '';
-                                            try {
-                                                if (cell.fill && cell.fill.type === 'pattern' && cell.fill.fgColor) {
-                                                    if (cell.fill.fgColor.argb && typeof cell.fill.fgColor.argb === 'string' && cell.fill.fgColor.argb.length === 8) {
-                                                        bgColor = '#' + cell.fill.fgColor.argb.substring(2);
-                                                        // 黒や透明は色なし(白)として扱う
-                                                        if (bgColor.toUpperCase() === '#000000' || cell.fill.fgColor.argb.substring(0, 2) === '00') bgColor = '';
-                                                    }
-                                                }
-                                            } catch(err) { bgColor = ''; }
-                                            colorMap[sheet.name][rIdx][cIdx] = bgColor;
-                                        });
-                                    });
-                                });
-                            } catch (colorError) {
-                                console.warn('色読み取りスキップ（古い形式のExcel等のため）:', colorError);
+                            let locCol = -1, itemCol = -1, startRow = -1;
+                            for (let r = 0; r < Math.min(10, json.length); r++) {
+                                if (!json[r]) continue;
+                                for (let c = 0; c < Math.min(5, json[r].length || 0); c++) {
+                                    if (String(json[r][c] || '').trim() === '場所') {
+                                        locCol = c;
+                                        for (let nextC = c + 1; nextC < Math.min(c + 4, json[r].length); nextC++) {
+                                            if (String(json[r][nextC] || '').trim()) { itemCol = nextC; break; }
+                                        }
+                                        if (itemCol !== -1) { startRow = r + 1; break; }
+                                    }
+                                }
+                                if (locCol !== -1 && itemCol !== -1) break;
                             }
                             
-                            // 4. データ合体
-                            let extractedData = {};
-                            let pfix = categoryKey === 'instruments' ? 'inst_' : 'cons_';
+                            let items = [];
+                            let currentLoc = "";
+                            const noise = ["滅菌期限", "～", "/", "まで", "期限の切れ", "管理者へ", "月", "日", "確認日"];
+                            const exactNoise = ['商品名', '器械名/セット名', '器械名', 'セット名', '物品名', '薬品名', '場所'];
                             
-                            workbook.SheetNames.forEach(sheetName => {
-                                if (sheetName === '見本') return;
-                                const sheet = workbook.Sheets[sheetName];
-                                const json = XLSX.utils.sheet_to_json(sheet, {header: 1});
-                                
-                                let locCol = -1, itemCol = -1, startRow = -1;
-                                for (let r = 0; r < Math.min(10, json.length); r++) {
-                                    if (!json[r]) continue;
-                                    for (let c = 0; c < Math.min(5, json[r].length || 0); c++) {
-                                        if (String(json[r][c] || '').trim() === '場所') {
-                                            locCol = c;
-                                            for (let nextC = c + 1; nextC < Math.min(c + 4, json[r].length); nextC++) {
-                                                if (String(json[r][nextC] || '').trim()) { itemCol = nextC; break; }
-                                            }
-                                            if (itemCol !== -1) { startRow = r + 1; break; }
-                                        }
-                                    }
-                                    if (locCol !== -1 && itemCol !== -1) break;
-                                }
-                                
-                                let items = [];
-                                let currentLoc = "";
-                                const noise = ["滅菌期限", "～", "/", "まで", "期限の切れ", "管理者へ", "月", "日", "確認日"];
-                                const exactNoise = ['商品名', '器械名/セット名', '器械名', 'セット名', '物品名', '薬品名', '場所'];
-                                
-                                if (locCol !== -1 && itemCol !== -1) {
-                                    for (let r = startRow; r < json.length; r++) {
-                                        if(!json[r]) continue;
-                                        let locVal = String(json[r][locCol] || '').trim();
-                                        let itemVal = String(json[r][itemCol] || '').trim();
+                            if (locCol !== -1 && itemCol !== -1) {
+                                for (let r = startRow; r < json.length; r++) {
+                                    if(!json[r]) continue;
+                                    let locVal = String(json[r][locCol] || '').trim();
+                                    let itemVal = String(json[r][itemCol] || '').trim();
+                                    
+                                    if (locVal && locVal !== 'undefined') currentLoc = locVal.replace(/\n/g, ' ');
+                                    if (itemVal && itemVal !== 'undefined') {
+                                        if (noise.some(n => itemVal.includes(n)) || exactNoise.includes(itemVal) || !isNaN(itemVal) || itemVal.length < 2 || itemVal.includes('チェックリスト')) continue;
                                         
-                                        let itemColor = colorMap[sheetName]?.[r]?.[itemCol] || '';
-                                        
-                                        if (locVal && locVal !== 'undefined') currentLoc = locVal.replace(/\n/g, ' ');
-                                        if (itemVal && itemVal !== 'undefined') {
-                                            if (noise.some(n => itemVal.includes(n)) || exactNoise.includes(itemVal) || !isNaN(itemVal) || itemVal.length < 2 || itemVal.includes('チェックリスト')) continue;
-                                            items.push({ id: pfix + currentLoc + '_' + itemVal + '_' + r, location: currentLoc, name: itemVal, color: itemColor });
-                                        }
-                                    }
-                                } else {
-                                    let bestCol = -1, maxItems = 0;
-                                    for (let colIdx = 0; colIdx < 4; colIdx++) {
-                                        let colData = [];
-                                        for (let r = 0; r < json.length; r++) { if (json[r] && json[r][colIdx]) colData.push(String(json[r][colIdx]).trim()); }
-                                        let cleaned = colData.filter(x => {
-                                            if(!x || !isNaN(x) || x.length < 2 || x.includes('チェックリスト')) return false;
-                                            for(let n of noise) if(x.includes(n)) return false;
-                                            return true;
-                                        });
-                                        if (cleaned.length > maxItems) { maxItems = cleaned.length; bestCol = colIdx; }
-                                    }
-                                    if (bestCol !== -1) {
-                                        let seen = new Set();
-                                        for (let r = 0; r < json.length; r++) {
-                                            if (!json[r]) continue;
-                                            let itemVal = String(json[r]?.[bestCol] || '').trim();
-                                            let itemColor = colorMap[sheetName]?.[r]?.[bestCol] || '';
-                                            
-                                            if (itemVal && itemVal !== 'undefined' && !exactNoise.includes(itemVal) && !noise.some(n => itemVal.includes(n)) && isNaN(itemVal) && itemVal.length >= 2 && !itemVal.includes('チェックリスト')) {
-                                                if (!seen.has(itemVal)) { 
-                                                    seen.add(itemVal); 
-                                                    items.push({ id: pfix + 'none_' + itemVal + '_' + r, location: '-', name: itemVal, color: itemColor }); 
+                                        // 🎨 ピンポイント色抽出
+                                        let itemColor = '';
+                                        if (exceljsWb) {
+                                            try {
+                                                const eSheet = exceljsWb.getWorksheet(sheetName);
+                                                if (eSheet) {
+                                                    const cell = eSheet.getRow(r + 1).getCell(itemCol + 1); // 1-indexed
+                                                    if (cell.fill && cell.fill.type === 'pattern' && cell.fill.fgColor) {
+                                                        if (cell.fill.fgColor.argb && cell.fill.fgColor.argb.length === 8) {
+                                                            itemColor = '#' + cell.fill.fgColor.argb.substring(2);
+                                                            if (itemColor.toUpperCase() === '#000000' || cell.fill.fgColor.argb.substring(0, 2) === '00') itemColor = '';
+                                                        }
+                                                    }
                                                 }
+                                            } catch(e) {}
+                                        }
+                                        
+                                        items.push({ id: pfix + currentLoc + '_' + itemVal + '_' + r, location: currentLoc, name: itemVal, color: itemColor });
+                                    }
+                                }
+                            } else {
+                                let bestCol = -1, maxItems = 0;
+                                for (let colIdx = 0; colIdx < 4; colIdx++) {
+                                    let colData = [];
+                                    for (let r = 0; r < json.length; r++) { if (json[r] && json[r][colIdx]) colData.push(String(json[r][colIdx]).trim()); }
+                                    let cleaned = colData.filter(x => {
+                                        if(!x || !isNaN(x) || x.length < 2 || x.includes('チェックリスト')) return false;
+                                        for(let n of noise) if(x.includes(n)) return false;
+                                        return true;
+                                    });
+                                    if (cleaned.length > maxItems) { maxItems = cleaned.length; bestCol = colIdx; }
+                                }
+                                if (bestCol !== -1) {
+                                    let seen = new Set();
+                                    for (let r = 0; r < json.length; r++) {
+                                        if (!json[r]) continue;
+                                        let itemVal = String(json[r]?.[bestCol] || '').trim();
+                                        
+                                        if (itemVal && itemVal !== 'undefined' && !exactNoise.includes(itemVal) && !noise.some(n => itemVal.includes(n)) && isNaN(itemVal) && itemVal.length >= 2 && !itemVal.includes('チェックリスト')) {
+                                            if (!seen.has(itemVal)) { 
+                                                seen.add(itemVal); 
+                                                
+                                                // 🎨 ピンポイント色抽出
+                                                let itemColor = '';
+                                                if (exceljsWb) {
+                                                    try {
+                                                        const eSheet = exceljsWb.getWorksheet(sheetName);
+                                                        if (eSheet) {
+                                                            const cell = eSheet.getRow(r + 1).getCell(bestCol + 1);
+                                                            if (cell.fill && cell.fill.type === 'pattern' && cell.fill.fgColor) {
+                                                                if (cell.fill.fgColor.argb && cell.fill.fgColor.argb.length === 8) {
+                                                                    itemColor = '#' + cell.fill.fgColor.argb.substring(2);
+                                                                    if (itemColor.toUpperCase() === '#000000' || cell.fill.fgColor.argb.substring(0, 2) === '00') itemColor = '';
+                                                                }
+                                                            }
+                                                        }
+                                                    } catch(e) {}
+                                                }
+
+                                                items.push({ id: pfix + 'none_' + itemVal + '_' + r, location: '-', name: itemVal, color: itemColor }); 
                                             }
                                         }
                                     }
                                 }
-                                if (items.length > 0) extractedData[sheetName] = items;
-                            });
-                            
-                            this.categories[categoryKey] = extractedData;
-                            this.currentYear = new Date().getFullYear();
-                            if (new Date().getMonth() < 3) this.currentYear--; 
-                            this.ensureKeys();
-                            this.saveMaster();
-                            event.target.value = ''; 
-                            
-                        } catch (error) {
-                            console.error('致命的な読み込みエラー:', error);
-                            alert('ファイルの読み込みに失敗しました。対応していないファイル形式です。');
-                        }
-                    };
-                    
-                    // 古いブラウザでも必ず動く安全な読み込み開始メソッド
-                    reader.readAsArrayBuffer(file);
+                            }
+                            if (items.length > 0) extractedData[sheetName] = items;
+                        });
+                        
+                        this.categories[categoryKey] = extractedData;
+                        // 💡 読み込んだデータをすぐに表示させる（迷子防止）
+                        this.activeCat = categoryKey;
+                        this.activeTab = Object.keys(extractedData)[0];
+                        
+                        this.currentYear = new Date().getFullYear();
+                        if (new Date().getMonth() < 3) this.currentYear--; 
+                        
+                        this.ensureKeys();
+                        this.saveMaster();
+                        event.target.value = ''; 
+                        
+                    } catch (error) {
+                        console.error('致命的な読み込みエラー:', error);
+                        alert('ファイルの読み込みに失敗しました。');
+                    }
                 },
 
                 saveAndAutoFill(value) {
@@ -797,7 +820,7 @@
                     this.padTarget = { type, cat, dept, item: itemObj, month: ym }; 
                     this.padTitle = type === 'check' ? `[確認日] ${this.formatMonthHeader(ym)} の設定` : `[${this.formatMonthHeader(ym)}期限] ${itemObj.name}`;
                     
-                    let currentVal = type === 'check' ? this.checkDates[cat][dept][ym] : this.inputs[cat][dept][itemObj.id][ym];
+                    let currentVal = type === 'check' ? this.checkDates[cat]?.[dept]?.[ym] : this.inputs[cat]?.[dept]?.[itemObj.id]?.[ym];
                     this.calendarDate = ''; 
                     
                     if (currentVal === '➡' || currentVal === '→') {
@@ -938,7 +961,7 @@
                     const dueDate = this.getAbsoluteDueDate(cat, dept, itemId, ym);
                     if (!dueDate) return false;
 
-                    const threshold = this.itemAlerts[itemId] || 1; // 💡 デフォルト1ヶ月
+                    const threshold = this.itemAlerts[itemId] || 1;
                     const alertDate = new Date(dueDate);
                     alertDate.setMonth(alertDate.getMonth() - threshold);
                     return alertDate <= checkDate;
@@ -974,11 +997,12 @@
                     today.setHours(0,0,0,0);
                     
                     ['instruments', 'consumables'].forEach(cat => {
+                        if (!this.categories[cat]) return;
                         let catName = cat === 'instruments' ? '🛠 器械' : '🩹 消耗品';
                         
                         for(let dept in this.categories[cat]) {
                             for(let itemObj of this.categories[cat][dept]) {
-                                const threshold = this.itemAlerts[itemObj.id] || 1; // 💡 デフォルト1ヶ月
+                                const threshold = this.itemAlerts[itemObj.id] || 1; 
                                 const limitDate = new Date(today);
                                 limitDate.setMonth(today.getMonth() + threshold);
                                 

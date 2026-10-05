@@ -6,7 +6,7 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     
-    <title>OP室 滅菌期限管理（Undo対応・色指定版）</title>
+    <title>OP室 滅菌期限管理（日本語入力対応版）</title>
     <!-- オフライン安定版CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     
@@ -40,7 +40,6 @@
         <div class="bg-blue-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4 flex-shrink-0">
             <h1 class="text-xl md:text-2xl font-bold">🏥 OP室 期限管理 (器械/消耗品)</h1>
             
-            <!-- 💡 セットアップ完了時のみボタン群を表示 -->
             <div class="flex gap-2 flex-wrap justify-center items-center" x-show="isSetupComplete" style="display: none;">
                 <button @click="exportCurrentDeptToExcel()" class="text-sm md:text-base font-bold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
                     📥 Excel出力
@@ -49,13 +48,11 @@
                     📊 全体集計
                 </button>
                 
-                <!-- 🛠 編集モード＆戻す（Undo）ボタンのグループ -->
                 <div class="flex items-center gap-1 bg-indigo-800 p-1 rounded-lg shadow-inner">
                     <button @click="toggleEditMode()" class="text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-md shadow-md transition-colors">
                         <span x-text="isEditMode ? '✅ 編集完了' : '🛠 編集'"></span>
                     </button>
                     
-                    <!-- 💡 編集モードの時だけ出現する「戻す」ボタン -->
                     <button @click="undo()" 
                             x-show="isEditMode" style="display: none;"
                             :disabled="history.length === 0"
@@ -71,7 +68,6 @@
             </div>
         </div>
 
-        <!-- 初期セットアップ画面 -->
         <div x-show="!isSetupComplete" class="p-6 md:p-10 flex flex-col items-center justify-center flex-1 text-center bg-white overflow-y-auto">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">🔧 初期セットアップ</h2>
             <p class="text-gray-500 mb-8 max-w-2xl">必要なExcelファイルを読み込んでください。（片方だけでも開始できます）</p>
@@ -227,7 +223,7 @@
         </div>
     </div>
 
-    <!-- ⚙️ 個別アラート設定モーダル -->
+    <!-- ⚙️️ 個別アラート設定モーダル -->
     <div x-show="isItemAlertModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isItemAlertModalOpen = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all flex flex-col gap-4">
             <h2 class="text-lg font-bold text-gray-700 border-b pb-2">個別アラート設定</h2>
@@ -249,14 +245,17 @@
         </div>
     </div>
 
-    <!-- ➕ 追加モーダル（色指定機能追加！） -->
+    <!-- ➕ 追加モーダル（💡日本語入力バグ修正版） -->
     <div x-show="isAddModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isAddModalOpen = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform transition-all flex flex-col gap-4">
             <h2 class="text-xl md:text-2xl font-bold text-blue-900 border-b-2 border-blue-100 pb-2"><span x-text="addModalDept"></span> への追加</h2>
+            
+            <!-- 💡 x-model.lazy を使って日本語変換の邪魔をしないように修正 -->
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">物品名 <span class="text-red-500">*</span></label>
-                <input type="text" x-model="addModalName" class="w-full border-2 border-gray-300 rounded-lg p-3 text-lg focus:border-blue-500 focus:outline-none" placeholder="例: シリンジ10ml">
+                <input type="text" inputmode="text" x-model.lazy="addModalName" class="w-full border-2 border-gray-300 rounded-lg p-3 text-lg focus:border-blue-500 focus:outline-none" placeholder="例: シリンジ10ml">
             </div>
+            
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">場所（保管場所）を指定</label>
                 <select x-model="addModalLocation" class="w-full border-2 border-gray-300 rounded-lg p-3 text-lg bg-white focus:border-blue-500 focus:outline-none mb-2 font-bold text-blue-800">
@@ -266,7 +265,8 @@
                     <option value="new">➕ 新しい場所を直接入力する...</option>
                     <option value="none">（場所なし・指定しない）</option>
                 </select>
-                <input type="text" x-show="addModalLocation === 'new'" x-model="addModalNewLocation" class="w-full border-2 border-yellow-300 rounded-lg p-3 text-lg bg-yellow-50 focus:border-yellow-500 focus:outline-none" placeholder="新しい場所名を入力">
+                <!-- 💡 こちらも x-model.lazy に修正 -->
+                <input type="text" inputmode="text" x-show="addModalLocation === 'new'" x-model.lazy="addModalNewLocation" class="w-full border-2 border-yellow-300 rounded-lg p-3 text-lg bg-yellow-50 focus:border-yellow-500 focus:outline-none" placeholder="新しい場所名を入力">
             </div>
             
             <!-- 🎨 色を指定する機能 -->
@@ -460,7 +460,7 @@
                 availableLocations: [],
                 
                 // 🎨 色追加機能用
-                addModalColor: '#fca5a5', // デフォルト（薄い赤）
+                addModalColor: '#fca5a5', 
                 useColor: false,
 
                 isItemAlertModalOpen: false,
@@ -651,11 +651,10 @@
                     if (this.addModalLocation === 'new') loc = this.addModalNewLocation.trim();
                     else if (this.addModalLocation !== 'none') loc = this.addModalLocation;
                     
-                    this.saveStateForUndo(); // 🛠 追加前に履歴を保存
+                    this.saveStateForUndo(); 
 
                     let id = (this.addModalCat === 'instruments' ? "inst_" : "cons_") + Date.now();
                     
-                    // 🎨 色が指定されていれば取得
                     let itemColor = this.useColor ? this.addModalColor : '';
                     let newItem = { id: id, location: loc, name: name, color: itemColor };
                     
@@ -679,7 +678,7 @@
 
                 removeItem(cat, dept, index) {
                     if (confirm(`削除しますか？`)) { 
-                        this.saveStateForUndo(); // 🛠 削除前に履歴を保存
+                        this.saveStateForUndo(); 
                         this.categories[cat][dept].splice(index, 1); 
                         this.saveMaster(); 
                     }
@@ -688,10 +687,10 @@
                 moveItem(cat, dept, index, dir) {
                     let arr = this.categories[cat][dept];
                     if (dir === -1 && index > 0) {
-                        this.saveStateForUndo(); // 🛠 移動前に履歴を保存
+                        this.saveStateForUndo(); 
                         let temp = arr[index]; arr[index] = arr[index - 1]; arr[index - 1] = temp; this.saveMaster();
                     } else if (dir === 1 && index < arr.length - 1) {
-                        this.saveStateForUndo(); // 🛠 移動前に履歴を保存
+                        this.saveStateForUndo(); 
                         let temp = arr[index]; arr[index] = arr[index + 1]; arr[index + 1] = temp; this.saveMaster();
                     }
                 },

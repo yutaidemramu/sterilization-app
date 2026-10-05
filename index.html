@@ -6,8 +6,7 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     
-    <title>OP室 滅菌期限管理（日本語入力対応版）</title>
-    <!-- オフライン安定版CSS -->
+    <title>OP室 滅菌期限管理（長文折り返し対応版）</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -138,7 +137,7 @@
 
             <div class="p-2 bg-yellow-50 text-xs md:text-sm text-gray-800 border-b border-gray-200 shadow-sm flex items-center gap-2 flex-shrink-0">
                 <span class="text-lg">💡</span> 
-                <p><strong>「🛠編集」</strong>を押すと「戻す」ボタンが使えます。<strong>⚙️マーク</strong>で物品ごとのアラート月数（標準1ヶ月）を変更可能。</p>
+                <p><strong>「🛠編集」</strong>でリストの編集と「戻す」ボタンが使えます。<strong>⚙️マーク</strong>でアラート月数を変更可能。</p>
             </div>
 
             <div class="table-container p-1 flex-1">
@@ -168,18 +167,18 @@
                             <tr class="hover:bg-blue-50 transition-colors" :class="{'bg-green-50': isEditMode}">
                                 <td class="border border-gray-300 p-2 font-bold text-blue-900 sticky-col-1 whitespace-normal break-words align-middle" x-text="item.location"></td>
                                 
-                                <!-- 色指定反映部分 -->
                                 <td class="border border-gray-300 p-2 font-medium text-left sticky-col-2"
                                     :style="item.color ? `background-color: ${item.color};` : 'background-color: #ffffff;'"
                                     :class="item.color ? 'text-black font-bold border-gray-400' : 'text-gray-800'">
                                     
-                                    <div class="flex justify-between items-center h-full group">
-                                        <div class="flex items-center gap-2 overflow-hidden">
-                                            <span class="truncate pr-1" x-text="item.name" :title="item.name"></span>
-                                            <button @click.stop="openItemAlertModal(activeCat, activeTab, item)" class="text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0 bg-white bg-opacity-70 rounded-full px-1" title="個別アラート設定">⚙️</button>
-                                            
+                                    <div class="flex justify-between items-center h-full group gap-2">
+                                        <!-- 💡 長い文字の折り返し対応 (whitespace-normal break-words) -->
+                                        <span class="whitespace-normal break-words leading-tight flex-1" x-text="item.name" :title="item.name"></span>
+                                        
+                                        <div class="flex items-center gap-1 flex-shrink-0">
+                                            <button @click.stop="openItemAlertModal(activeCat, activeTab, item)" class="text-gray-400 hover:text-blue-600 transition-colors bg-white bg-opacity-70 rounded-full px-1 py-0.5" title="個別アラート設定">⚙️</button>
                                             <span x-show="itemAlerts[item.id] && itemAlerts[item.id] !== 1" 
-                                                  class="text-[10px] md:text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded border border-red-200 font-bold flex-shrink-0 shadow-sm" 
+                                                  class="text-[10px] md:text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded border border-red-200 font-bold shadow-sm whitespace-nowrap" 
                                                   x-text="itemAlerts[item.id] + 'ヶ月前'"></span>
                                         </div>
 
@@ -223,7 +222,7 @@
         </div>
     </div>
 
-    <!-- ⚙️️ 個別アラート設定モーダル -->
+    <!-- ⚙ 個別アラート設定モーダル -->
     <div x-show="isItemAlertModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isItemAlertModalOpen = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all flex flex-col gap-4">
             <h2 class="text-lg font-bold text-gray-700 border-b pb-2">個別アラート設定</h2>
@@ -245,12 +244,11 @@
         </div>
     </div>
 
-    <!-- ➕ 追加モーダル（💡日本語入力バグ修正版） -->
+    <!-- ➕ 追加モーダル -->
     <div x-show="isAddModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isAddModalOpen = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform transition-all flex flex-col gap-4">
             <h2 class="text-xl md:text-2xl font-bold text-blue-900 border-b-2 border-blue-100 pb-2"><span x-text="addModalDept"></span> への追加</h2>
             
-            <!-- 💡 x-model.lazy を使って日本語変換の邪魔をしないように修正 -->
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">物品名 <span class="text-red-500">*</span></label>
                 <input type="text" inputmode="text" x-model.lazy="addModalName" class="w-full border-2 border-gray-300 rounded-lg p-3 text-lg focus:border-blue-500 focus:outline-none" placeholder="例: シリンジ10ml">
@@ -265,7 +263,6 @@
                     <option value="new">➕ 新しい場所を直接入力する...</option>
                     <option value="none">（場所なし・指定しない）</option>
                 </select>
-                <!-- 💡 こちらも x-model.lazy に修正 -->
                 <input type="text" inputmode="text" x-show="addModalLocation === 'new'" x-model.lazy="addModalNewLocation" class="w-full border-2 border-yellow-300 rounded-lg p-3 text-lg bg-yellow-50 focus:border-yellow-500 focus:outline-none" placeholder="新しい場所名を入力">
             </div>
             
@@ -311,7 +308,8 @@
                                 <th class="p-3 border-b border-gray-300 font-bold">分類 / 科目</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">個別の設定</th>
                                 <th class="p-3 border-b border-gray-300 font-bold">場所</th>
-                                <th class="p-3 border-b border-gray-300 font-bold w-1/2">物品名</th>
+                                <!-- 💡 集計画面でも折り返し対応 -->
+                                <th class="p-3 border-b border-gray-300 font-bold min-w-[150px]">物品名</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">実際の期限</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">状態</th>
                             </tr>
@@ -326,8 +324,8 @@
                                     <td class="p-3 text-center">
                                         <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold" x-text="item.alertThreshold + 'ヶ月前'"></span>
                                     </td>
-                                    <td class="p-3 text-blue-800 font-bold" x-text="item.location"></td>
-                                    <td class="p-3 text-gray-900 font-bold" x-text="item.name"></td>
+                                    <td class="p-3 text-blue-800 font-bold whitespace-normal break-words" x-text="item.location"></td>
+                                    <td class="p-3 text-gray-900 font-bold whitespace-normal break-words" x-text="item.name"></td>
                                     <td class="p-3 text-center font-black text-lg text-red-600 tracking-wider" x-text="item.dueDate"></td>
                                     <td class="p-3 text-center">
                                         <span x-show="item.isExpired" class="bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm">期限切れ</span>
@@ -345,7 +343,8 @@
                             <tr>
                                 <th class="p-3 border-b border-gray-300 font-bold">分類 / 科目</th>
                                 <th class="p-3 border-b border-gray-300 font-bold">場所</th>
-                                <th class="p-3 border-b border-gray-300 font-bold w-1/2">物品名</th>
+                                <!-- 💡 集計画面でも折り返し対応 -->
+                                <th class="p-3 border-b border-gray-300 font-bold min-w-[150px]">物品名</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">設定されている期限</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">滞留期間</th>
                             </tr>
@@ -357,8 +356,8 @@
                                         <span x-text="item.catName" class="text-xs text-gray-500 mr-1 block"></span>
                                         <span x-text="item.dept"></span>
                                     </td>
-                                    <td class="p-3 text-blue-800 font-bold" x-text="item.location"></td>
-                                    <td class="p-3 text-gray-900 font-bold" x-text="item.name"></td>
+                                    <td class="p-3 text-blue-800 font-bold whitespace-normal break-words" x-text="item.location"></td>
+                                    <td class="p-3 text-gray-900 font-bold whitespace-normal break-words" x-text="item.name"></td>
                                     <td class="p-3 text-center font-bold text-gray-500" x-text="item.dueDate"></td>
                                     <td class="p-3 text-center">
                                         <span class="bg-yellow-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm" x-text="item.idleMonths + 'ヶ月放置'"></span>
@@ -436,7 +435,6 @@
                 inputs: { instruments: {}, consumables: {} },
                 itemAlerts: {},
                 
-                // 🛠 Undo（戻す）機能用の履歴配列
                 history: [],
                 
                 isDashboardOpen: false,
@@ -459,7 +457,6 @@
                 addModalNewLocation: '',
                 availableLocations: [],
                 
-                // 🎨 色追加機能用
                 addModalColor: '#fca5a5', 
                 useColor: false,
 
@@ -502,13 +499,11 @@
                     }
                 },
 
-                // 🛠 操作を戻すための履歴保存メソッド
                 saveStateForUndo() {
                     if (this.history.length >= 10) this.history.shift(); 
                     this.history.push(JSON.parse(JSON.stringify(this.categories)));
                 },
 
-                // 🛠 元に戻すメソッド
                 undo() {
                     if (this.history.length === 0) return;
                     const previousState = this.history.pop();
@@ -594,7 +589,7 @@
                 toggleEditMode() { 
                     this.isEditMode = !this.isEditMode; 
                     if (!this.isEditMode) {
-                        this.history = []; // 編集モード終了時に履歴をリセット
+                        this.history = []; 
                     }
                 },
                 

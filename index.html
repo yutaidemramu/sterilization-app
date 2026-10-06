@@ -6,7 +6,8 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     
-    <title>OP室 滅菌期限管理</title>
+    <title>OP室 滅菌期限管理（オフライン完全起動・Undo・色指定版）</title>
+    <!-- オフライン安定版CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -172,7 +173,6 @@
                                     :class="item.color ? 'text-black font-bold border-gray-400' : 'text-gray-800'">
                                     
                                     <div class="flex justify-between items-center h-full group gap-2">
-                                        <!-- 💡 長い文字の折り返し対応 (whitespace-normal break-words) -->
                                         <span class="whitespace-normal break-words leading-tight flex-1" x-text="item.name" :title="item.name"></span>
                                         
                                         <div class="flex items-center gap-1 flex-shrink-0">
@@ -308,7 +308,6 @@
                                 <th class="p-3 border-b border-gray-300 font-bold">分類 / 科目</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">個別の設定</th>
                                 <th class="p-3 border-b border-gray-300 font-bold">場所</th>
-                                <!-- 💡 集計画面でも折り返し対応 -->
                                 <th class="p-3 border-b border-gray-300 font-bold min-w-[150px]">物品名</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">実際の期限</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">状態</th>
@@ -343,7 +342,6 @@
                             <tr>
                                 <th class="p-3 border-b border-gray-300 font-bold">分類 / 科目</th>
                                 <th class="p-3 border-b border-gray-300 font-bold">場所</th>
-                                <!-- 💡 集計画面でも折り返し対応 -->
                                 <th class="p-3 border-b border-gray-300 font-bold min-w-[150px]">物品名</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">設定されている期限</th>
                                 <th class="p-3 border-b border-gray-300 font-bold text-center">滞留期間</th>
@@ -417,7 +415,20 @@
         </div>
     </div>
 
+    <!-- 💡 【ここが原因でした！】サービスワーカー（オフライン化）の登録命令 -->
     <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('オフライン準備完了！:', registration.scope);
+                    })
+                    .catch(err => {
+                        console.log('オフライン準備失敗:', err);
+                    });
+            });
+        }
+
         function appData() {
             const months = [4,5,6,7,8,9,10,11,12,1,2,3];
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'op-sterilization-v6'; // v6で古い記憶を強制リセット
+const CACHE_NAME = 'op-sterilization-v7'; // v7にアップデート
 const urlsToCache = [
     './',
     './index.html',
@@ -11,19 +11,26 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', event => {
-    self.skipWaiting(); // インストール後、すぐに最新版に切り替える
+    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME).then(cache => {
-            // エラーが起きても無視して、取得できるものだけ確実に保存する
-            return Promise.allSettled(
-                urlsToCache.map(url => cache.add(url).catch(err => console.log('保存スキップ:', url)))
+            return Promise.all(
+                urlsToCache.map(url => {
+                    return fetch(url).then(response => {
+                        if (response.ok) {
+                            return cache.put(url, response);
+                        }
+                    }).catch(error => {
+                        console.log('キャッシュ失敗:', url);
+                    });
+                })
             );
         })
     );
 });
 
 self.addEventListener('activate', event => {
-    self.clients.claim();
+    event.waitUntil(clients.claim());
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
@@ -33,29 +40,30 @@ self.addEventListener('activate', event => {
     );
 });
 
-// ネットワークファースト（通信できれば最新を、ダメなら保存したものを返す）
 self.addEventListener('fetch', event => {
-    if (event.request.method !== 'GET') return;
-
+    // 💡 医療現場のオフライン運用に特化した「キャッシュ優先（完全オフライン）」戦略
     event.respondWith(
-        fetch(event.request)
-            .then(response => {
-                // ネットに繋がっていれば最新のデータを保存しつつ返す
-                const clone = response.clone();
-                caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        // ignoreSearch: true で、URLの後ろにつく余計なシステム記号を無視して確実にヒットさせる
+        caches.match(event.request, { ignoreSearch: true }).then(response => {
+            // キャッシュにあれば、ネットに繋がっていてもいなくても即座にそれを返す
+            if (response) {
                 return response;
-            })
-            .catch(() => {
-                // 完全にオフラインの場合は、保存しておいたデータを返す
-                return caches.match(event.request).then(cachedResponse => {
-                    if (cachedResponse) {
-                        return cachedResponse;
-                    }
-                    // もし画面そのものを開こうとした場合は強制的に index.html を返す
-                    if (event.request.mode === 'navigate' || event.request.headers.get('accept').includes('text/html')) {
-                        return caches.match('./index.html') || caches.match('./');
-                    }
+            }
+            
+            // 画面の要求であれば、強制的に index.html を返す
+            if (event.request.mode === 'navigate' || event.request.url.endsWith('/')) {
+                return caches.match('./index.html', { ignoreSearch: true }).then(htmlRes => {
+                    return htmlRes || fetch(event.request);
                 });
-            })
+            }
+
+            // それ以外（未知の通信）はネットワークに頼る
+            return fetch(event.request);
+        }).catch(() => {
+            // ネットワークも落ちている場合（完全オフライン）の最終手段
+            if (event.request.mode === 'navigate' || event.request.url.endsWith('/')) {
+                return caches.match('./index.html', { ignoreSearch: true });
+            }
+        })
     );
 });

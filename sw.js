@@ -1,11 +1,12 @@
-const CACHE_NAME = 'op-sterilization-v9'; // v9にアップデート
+const CACHE_NAME = 'op-sterilization-v10'; // v10にアップデート
 const urlsToCache = [
     './',
     './index.html',
     './manifest.json',
+    './icon.png',
     'https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css',
-    'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
-    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.3/cdn.min.js', // 💡確実に保存できる固定バージョンに変更
+    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js'
 ];
 
@@ -42,9 +43,7 @@ self.addEventListener('fetch', event => {
     
     event.respondWith(
         caches.match(event.request, { ignoreSearch: true }).then(cachedResponse => {
-            // キャッシュがあれば必ず返す（完全オフライン対応）
             if (cachedResponse) {
-                // ネットがあれば裏でこっそり最新データに更新
                 fetch(event.request).then(networkResponse => {
                     if (networkResponse && networkResponse.status === 200) {
                         caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse.clone()));
@@ -53,7 +52,6 @@ self.addEventListener('fetch', event => {
                 return cachedResponse;
             }
             
-            // キャッシュがなければ通信を試みる
             return fetch(event.request).then(networkResponse => {
                 if (networkResponse && networkResponse.status === 200) {
                     const responseToCache = networkResponse.clone();
@@ -61,7 +59,6 @@ self.addEventListener('fetch', event => {
                 }
                 return networkResponse;
             }).catch(() => {
-                // 完全オフライン時の最終防衛ライン
                 if (event.request.mode === 'navigate' || event.request.headers.get('accept').includes('text/html')) {
                     return caches.match('./index.html', { ignoreSearch: true });
                 }

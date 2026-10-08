@@ -1,11 +1,11 @@
-const CACHE_NAME = 'op-sterilization-v11'; // v11にアップデート
+const CACHE_NAME = 'op-sterilization-v12'; // v12にアップデート
 const urlsToCache = [
     './',
     './index.html',
     './manifest.json',
     './icon.png',
     'https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css',
-    'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js', // 元の安定版に戻しました
+    'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js',
     'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js'
 ];
@@ -14,12 +14,10 @@ self.addEventListener('install', event => {
     self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME).then(cache => {
-            return Promise.all(
-                urlsToCache.map(url => {
-                    return fetch(url).then(response => {
-                        if (response.ok) return cache.put(url, response);
-                    }).catch(err => console.log('保存スキップ:', url));
-                })
+            return Promise.allSettled(
+                urlsToCache.map(url => fetch(url).then(response => {
+                    if (response.ok) return cache.put(url, response);
+                }).catch(err => console.log('保存スキップ:', url)))
             );
         })
     );

@@ -6,7 +6,7 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     
-    <title>OP室 滅菌期限管理（v13 同期完全版）</title>
+    <title>OP室 滅菌期限管理（v14 PCスクロール対応版）</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -28,14 +28,22 @@
         .tap-btn:active { transform: scale(0.9); filter: brightness(0.9); }
         input[type="date"], input[type="color"], select { cursor: pointer; }
         
-        .hide-scroll::-webkit-scrollbar { display: none; }
-        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        /* 💡 PC向けスクロールバーデザイン */
+        .tab-scroll {
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 #f1f5f9;
+            padding-bottom: 2px;
+        }
+        .tab-scroll::-webkit-scrollbar { height: 8px; }
+        .tab-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .tab-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .tab-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body class="bg-gray-100 p-2 md:p-6" x-data="appData()" x-init="initApp()">
     <div class="mx-auto bg-white rounded-xl shadow-xl overflow-hidden flex flex-col app-container">
         
-        <!-- ヘッダー -->
         <div class="bg-blue-900 text-white p-4 flex flex-col xl:flex-row justify-between items-center gap-4 flex-shrink-0">
             <h1 class="text-xl md:text-2xl font-bold">🏥 OP室 期限管理</h1>
             
@@ -130,9 +138,10 @@
             </div>
 
             <div class="flex flex-col bg-gray-50 shadow-sm flex-shrink-0">
-                <div class="flex items-center overflow-x-auto hide-scroll border-b border-gray-200" x-show="Object.keys(categories.instruments).length > 0">
-                    <div class="px-3 py-2 bg-blue-100 text-blue-900 font-bold whitespace-nowrap flex-shrink-0 border-r border-blue-200 text-sm md:text-base">🛠 器械定数</div>
-                    <div class="flex">
+                <!-- 💡 PC向けのスクロール対応 (.tab-scroll) -->
+                <div class="flex items-center tab-scroll border-b border-gray-200" x-show="Object.keys(categories.instruments).length > 0">
+                    <div class="px-3 py-2 bg-blue-100 text-blue-900 font-bold whitespace-nowrap flex-shrink-0 border-r border-blue-200 text-sm md:text-base sticky left-0 z-10">🛠 器械定数</div>
+                    <div class="flex pl-2">
                         <template x-for="dept in Object.keys(categories.instruments)">
                             <button @click="switchTab('instruments', dept)"
                                 :class="{'border-b-4 border-blue-600 bg-white font-bold text-blue-800': activeCat === 'instruments' && activeTab === dept, 'text-gray-500 hover:bg-gray-100': !(activeCat === 'instruments' && activeTab === dept)}"
@@ -141,9 +150,10 @@
                         </template>
                     </div>
                 </div>
-                <div class="flex items-center overflow-x-auto hide-scroll border-b border-gray-200" x-show="Object.keys(categories.consumables).length > 0">
-                    <div class="px-3 py-2 bg-green-100 text-green-900 font-bold whitespace-nowrap flex-shrink-0 border-r border-green-200 text-sm md:text-base">🩹 消耗品一覧</div>
-                    <div class="flex">
+                <!-- 💡 PC向けのスクロール対応 (.tab-scroll) -->
+                <div class="flex items-center tab-scroll border-b border-gray-200" x-show="Object.keys(categories.consumables).length > 0">
+                    <div class="px-3 py-2 bg-green-100 text-green-900 font-bold whitespace-nowrap flex-shrink-0 border-r border-green-200 text-sm md:text-base sticky left-0 z-10">🩹 消耗品一覧</div>
+                    <div class="flex pl-2">
                         <template x-for="dept in Object.keys(categories.consumables)">
                             <button @click="switchTab('consumables', dept)"
                                 :class="{'border-b-4 border-green-600 bg-white font-bold text-green-800': activeCat === 'consumables' && activeTab === dept, 'text-gray-500 hover:bg-gray-100': !(activeCat === 'consumables' && activeTab === dept)}"
@@ -240,7 +250,7 @@
         </div>
     </div>
 
-    <!-- モーダル・パッド関連 -->
+    <!-- 各種モーダル -->
     <div x-show="isItemAlertModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isItemAlertModalOpen = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all flex flex-col gap-4">
             <h2 class="text-lg font-bold text-gray-700 border-b pb-2">個別アラート設定</h2>
@@ -434,7 +444,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js?v=13')
+                navigator.serviceWorker.register('./sw.js?v=14')
                     .then(registration => {
                         registration.addEventListener('updatefound', () => {
                             const newWorker = registration.installing;
@@ -525,7 +535,6 @@
                     this.$watch('itemAlerts', val => localStorage.setItem('op_item_alerts_v4', JSON.stringify(val)), { deep: true });
                 },
                 
-                // 💡 データの書き出し（エクスポート）
                 exportSyncData() {
                     const syncData = {
                         categories: this.categories,
@@ -547,7 +556,6 @@
                     URL.revokeObjectURL(url);
                 },
 
-                // 💡 削除も含めた「完全スマートマージ機能」
                 importSyncData(event) {
                     const file = event.target.files[0];
                     if(!file) return;
@@ -558,7 +566,6 @@
                             
                             this.saveStateForUndo(); 
                             
-                            // 1. マスターの合体
                             ['instruments', 'consumables'].forEach(cat => {
                                 if(!syncData.categories || !syncData.categories[cat]) return;
                                 if(!this.categories[cat]) this.categories[cat] = {};
@@ -580,7 +587,6 @@
                                 });
                             });
 
-                            // 2. 入力データの合体（💡空文字による削除も確実に同期）
                             ['instruments', 'consumables'].forEach(cat => {
                                 if(!syncData.inputs || !syncData.inputs[cat]) return;
                                 if(!this.inputs[cat]) this.inputs[cat] = {};
@@ -597,7 +603,6 @@
                                 });
                             });
 
-                            // 3. 確認日の合体（💡空文字による削除も確実に同期）
                             ['instruments', 'consumables'].forEach(cat => {
                                 if(!syncData.checkDates || !syncData.checkDates[cat]) return;
                                 if(!this.checkDates[cat]) this.checkDates[cat] = {};
@@ -611,7 +616,6 @@
                                 });
                             });
 
-                            // 4. アラート設定の合体
                             if(syncData.itemAlerts) {
                                 Object.keys(syncData.itemAlerts).forEach(itemId => {
                                     this.itemAlerts[itemId] = syncData.itemAlerts[itemId];

@@ -1,12 +1,12 @@
-const CACHE_NAME = 'op-sterilization-v10'; // v10にアップデート
+const CACHE_NAME = 'op-sterilization-v11'; // v11にアップデート
 const urlsToCache = [
     './',
     './index.html',
     './manifest.json',
     './icon.png',
     'https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css',
-    'https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.3/cdn.min.js', // 💡確実に保存できる固定バージョンに変更
-    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+    'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js', // 元の安定版に戻しました
+    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js'
 ];
 
@@ -17,9 +17,7 @@ self.addEventListener('install', event => {
             return Promise.all(
                 urlsToCache.map(url => {
                     return fetch(url).then(response => {
-                        if (response.ok) {
-                            return cache.put(url, response);
-                        }
+                        if (response.ok) return cache.put(url, response);
                     }).catch(err => console.log('保存スキップ:', url));
                 })
             );
@@ -40,7 +38,6 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
     if (event.request.method !== 'GET') return;
-    
     event.respondWith(
         caches.match(event.request, { ignoreSearch: true }).then(cachedResponse => {
             if (cachedResponse) {
@@ -51,7 +48,6 @@ self.addEventListener('fetch', event => {
                 }).catch(() => {});
                 return cachedResponse;
             }
-            
             return fetch(event.request).then(networkResponse => {
                 if (networkResponse && networkResponse.status === 200) {
                     const responseToCache = networkResponse.clone();

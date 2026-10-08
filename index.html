@@ -6,7 +6,7 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     
-    <title>OP室 滅菌期限管理（v11 パッド完全修正版）</title>
+    <title>OP室 滅菌期限管理（v13 同期完全版）</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -35,19 +35,31 @@
 <body class="bg-gray-100 p-2 md:p-6" x-data="appData()" x-init="initApp()">
     <div class="mx-auto bg-white rounded-xl shadow-xl overflow-hidden flex flex-col app-container">
         
-        <div class="bg-blue-900 text-white p-4 flex flex-col md:flex-row justify-between items-center gap-4 flex-shrink-0">
-            <h1 class="text-xl md:text-2xl font-bold">🏥 OP室 期限管理 (器械/消耗品)</h1>
+        <!-- ヘッダー -->
+        <div class="bg-blue-900 text-white p-4 flex flex-col xl:flex-row justify-between items-center gap-4 flex-shrink-0">
+            <h1 class="text-xl md:text-2xl font-bold">🏥 OP室 期限管理</h1>
             
             <div class="flex gap-2 flex-wrap justify-center items-center" x-show="isSetupComplete" style="display: none;">
-                <button @click="exportCurrentDeptToExcel()" class="text-sm md:text-base font-bold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
+                
+                <div class="flex items-center gap-1 bg-blue-800 p-1 rounded-lg shadow-inner mr-2">
+                    <button @click="exportSyncData()" class="text-xs md:text-sm font-bold bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded-md shadow-md transition-colors flex items-center gap-1" title="この端末のデータをファイルとして保存します">
+                        📤 データ提出
+                    </button>
+                    <label class="text-xs md:text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-md shadow-md transition-colors flex items-center gap-1 cursor-pointer" title="他の端末のデータファイルを読み込んで合体させます">
+                        🔄 端末から同期
+                        <input type="file" accept=".json" class="hidden" @change="importSyncData">
+                    </label>
+                </div>
+
+                <button @click="exportCurrentDeptToExcel()" class="text-xs md:text-sm font-bold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
                     📥 Excel出力
                 </button>
-                <button @click="openDashboard()" class="text-sm md:text-base font-bold bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
+                <button @click="openDashboard()" class="text-xs md:text-sm font-bold bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-2 rounded-lg shadow-md transition-colors flex items-center gap-1">
                     📊 全体集計
                 </button>
                 
                 <div class="flex items-center gap-1 bg-indigo-800 p-1 rounded-lg shadow-inner">
-                    <button @click="toggleEditMode()" class="text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-md shadow-md transition-colors">
+                    <button @click="toggleEditMode()" class="text-xs md:text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-md shadow-md transition-colors">
                         <span x-text="isEditMode ? '✅ 編集完了' : '🛠 編集'"></span>
                     </button>
                     
@@ -55,12 +67,12 @@
                             x-show="isEditMode" style="display: none;"
                             :disabled="history.length === 0"
                             :class="history.length > 0 ? 'bg-pink-600 hover:bg-pink-500 text-white shadow-md' : 'bg-gray-400 text-gray-200 cursor-not-allowed'"
-                            class="text-sm md:text-base font-bold px-3 py-2 rounded-md transition-colors flex items-center gap-1" title="直前の操作を取り消す">
+                            class="text-xs md:text-sm font-bold px-3 py-2 rounded-md transition-colors flex items-center gap-1" title="直前の操作を取り消す">
                         ↩️ 戻す
                     </button>
                 </div>
 
-                <button @click="resetData()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded shadow-md opacity-70 hover:opacity-100 transition-opacity ml-2" title="エラーを完全に消し去る">
+                <button @click="resetData()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded shadow-md opacity-70 hover:opacity-100 transition-opacity ml-2">
                     全データ初期化
                 </button>
             </div>
@@ -92,6 +104,14 @@
                         <input type="file" class="hidden" accept=".xlsx, .xls" @change="e => handleFileUpload(e, 'consumables')">
                     </label>
                 </div>
+            </div>
+
+            <div class="mb-10 p-4 bg-purple-50 rounded-xl border border-purple-200 w-full max-w-4xl text-left shadow-sm">
+                <p class="text-purple-800 font-bold mb-2">💡 他の端末から出力したデータで復元・同期する場合：</p>
+                <label class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow cursor-pointer inline-block">
+                    🔄 データを同期（復元）する
+                    <input type="file" accept=".json" class="hidden" @change="importSyncData">
+                </label>
             </div>
 
             <button x-show="Object.keys(categories.instruments).length > 0 || Object.keys(categories.consumables).length > 0" 
@@ -136,7 +156,7 @@
 
             <div class="p-2 bg-yellow-50 text-xs md:text-sm text-gray-800 border-b border-gray-200 shadow-sm flex items-center gap-2 flex-shrink-0">
                 <span class="text-lg">💡</span> 
-                <p><strong>「🛠編集」</strong>でリストの編集と「戻す」ボタンが使えます。<strong>⚙️マーク</strong>でアラート月数を変更可能。</p>
+                <p><strong>「📤データ提出」</strong>でタブレットのデータを保存。ホストPCの<strong>「🔄端末から同期」</strong>で合体させます。</p>
             </div>
 
             <div class="table-container p-1 flex-1">
@@ -161,8 +181,8 @@
                             </template>
                         </tr>
                     </thead>
-                    <tbody class="text-sm md:text-base" x-show="activeCat && activeTab && categories[activeCat]?.[activeTab]">
-                        <template x-for="(item, index) in categories[activeCat]?.[activeTab] || []" :key="item.id">
+                    <tbody class="text-sm md:text-base" x-show="activeCat && activeTab && categories[activeCat] && categories[activeCat][activeTab]">
+                        <template x-for="(item, index) in (categories[activeCat] && categories[activeCat][activeTab]) || []" :key="item.id">
                             <tr class="hover:bg-blue-50 transition-colors" :class="{'bg-green-50': isEditMode}">
                                 <td class="border border-gray-300 p-2 font-bold text-blue-900 sticky-col-1 whitespace-normal break-words align-middle" x-text="item.location"></td>
                                 
@@ -220,7 +240,7 @@
         </div>
     </div>
 
-    <!-- ⚙ 個別アラート設定モーダル -->
+    <!-- モーダル・パッド関連 -->
     <div x-show="isItemAlertModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isItemAlertModalOpen = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all flex flex-col gap-4">
             <h2 class="text-lg font-bold text-gray-700 border-b pb-2">個別アラート設定</h2>
@@ -242,7 +262,6 @@
         </div>
     </div>
 
-    <!-- ➕ 追加モーダル -->
     <div x-show="isAddModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" style="display: none;" @click.self="isAddModalOpen = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform transition-all flex flex-col gap-4">
             <h2 class="text-xl md:text-2xl font-bold text-blue-900 border-b-2 border-blue-100 pb-2"><span x-text="addModalDept"></span> への追加</h2>
@@ -367,7 +386,7 @@
         </div>
     </div>
 
-    <!-- 入力パネル（🛠 パッド） -->
+    <!-- 入力パッド -->
     <div x-show="isPadOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-2" style="display: none;" @click.self="closePadCancel()">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl p-5 flex flex-col gap-3 transform transition-all">
             <div class="text-center text-gray-600 font-bold text-lg border-b pb-2"><span x-text="padTitle"></span></div>
@@ -415,7 +434,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js?v=11')
+                navigator.serviceWorker.register('./sw.js?v=13')
                     .then(registration => {
                         registration.addEventListener('updatefound', () => {
                             const newWorker = registration.installing;
@@ -506,6 +525,115 @@
                     this.$watch('itemAlerts', val => localStorage.setItem('op_item_alerts_v4', JSON.stringify(val)), { deep: true });
                 },
                 
+                // 💡 データの書き出し（エクスポート）
+                exportSyncData() {
+                    const syncData = {
+                        categories: this.categories,
+                        inputs: this.inputs,
+                        checkDates: this.checkDates,
+                        itemAlerts: this.itemAlerts,
+                        timestamp: new Date().toISOString()
+                    };
+                    const blob = new Blob([JSON.stringify(syncData)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    const now = new Date();
+                    const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+                    
+                    a.download = `OP管理_同期データ_${dateStr}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                },
+
+                // 💡 削除も含めた「完全スマートマージ機能」
+                importSyncData(event) {
+                    const file = event.target.files[0];
+                    if(!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const syncData = JSON.parse(e.target.result);
+                            
+                            this.saveStateForUndo(); 
+                            
+                            // 1. マスターの合体
+                            ['instruments', 'consumables'].forEach(cat => {
+                                if(!syncData.categories || !syncData.categories[cat]) return;
+                                if(!this.categories[cat]) this.categories[cat] = {};
+                                
+                                Object.keys(syncData.categories[cat]).forEach(dept => {
+                                    if(!this.categories[cat][dept]) {
+                                        this.categories[cat][dept] = syncData.categories[cat][dept]; 
+                                    } else {
+                                        const localItemIds = this.categories[cat][dept].map(i => i.id);
+                                        syncData.categories[cat][dept].forEach(incomingItem => {
+                                            const idx = localItemIds.indexOf(incomingItem.id);
+                                            if(idx === -1) {
+                                                this.categories[cat][dept].push(incomingItem);
+                                            } else {
+                                                this.categories[cat][dept][idx] = { ...this.categories[cat][dept][idx], ...incomingItem };
+                                            }
+                                        });
+                                    }
+                                });
+                            });
+
+                            // 2. 入力データの合体（💡空文字による削除も確実に同期）
+                            ['instruments', 'consumables'].forEach(cat => {
+                                if(!syncData.inputs || !syncData.inputs[cat]) return;
+                                if(!this.inputs[cat]) this.inputs[cat] = {};
+                                Object.keys(syncData.inputs[cat]).forEach(dept => {
+                                    if(!this.inputs[cat][dept]) this.inputs[cat][dept] = {};
+                                    Object.keys(syncData.inputs[cat][dept]).forEach(itemId => {
+                                        if(!this.inputs[cat][dept][itemId]) this.inputs[cat][dept][itemId] = {};
+                                        Object.keys(syncData.inputs[cat][dept][itemId]).forEach(ym => {
+                                            if (syncData.inputs[cat][dept][itemId][ym] !== undefined) { 
+                                                this.inputs[cat][dept][itemId][ym] = syncData.inputs[cat][dept][itemId][ym];
+                                            }
+                                        });
+                                    });
+                                });
+                            });
+
+                            // 3. 確認日の合体（💡空文字による削除も確実に同期）
+                            ['instruments', 'consumables'].forEach(cat => {
+                                if(!syncData.checkDates || !syncData.checkDates[cat]) return;
+                                if(!this.checkDates[cat]) this.checkDates[cat] = {};
+                                Object.keys(syncData.checkDates[cat]).forEach(dept => {
+                                    if(!this.checkDates[cat][dept]) this.checkDates[cat][dept] = {};
+                                    Object.keys(syncData.checkDates[cat][dept]).forEach(ym => {
+                                        if (syncData.checkDates[cat][dept][ym] !== undefined) {
+                                            this.checkDates[cat][dept][ym] = syncData.checkDates[cat][dept][ym];
+                                        }
+                                    });
+                                });
+                            });
+
+                            // 4. アラート設定の合体
+                            if(syncData.itemAlerts) {
+                                Object.keys(syncData.itemAlerts).forEach(itemId => {
+                                    this.itemAlerts[itemId] = syncData.itemAlerts[itemId];
+                                });
+                            }
+
+                            this.categories = JSON.parse(JSON.stringify(this.categories));
+                            this.inputs = JSON.parse(JSON.stringify(this.inputs));
+                            this.checkDates = JSON.parse(JSON.stringify(this.checkDates));
+
+                            this.ensureKeys();
+                            this.saveMaster();
+                            alert("データの同期（合体）が完了しました！\nすべての情報が最新の状態になっています。");
+                            
+                        } catch(err) {
+                            alert("ファイルの読み込みに失敗しました。同期用のデータ(.json)を選択してください。");
+                        }
+                        event.target.value = ''; 
+                    };
+                    reader.readAsText(file);
+                },
+
                 resetData() {
                     if(confirm("※注意※\nすべてのデータとシステムエラーを完全に初期化します。\n本当によろしいですか？")) {
                         localStorage.clear();
@@ -638,18 +766,12 @@
                     this.isItemAlertModalOpen = false;
                 },
 
-                // 💡 今回の修正箇所：タップで今日の日付をセットし、さらにパッドも開く
                 toggleCheckDate(cat, dept, ym) {
                     if (this.isEditMode) return;
-                    
-                    if (!(this.checkDates[cat] && this.checkDates[cat][dept] && this.checkDates[cat][dept][ym])) {
+                    if (!this.checkDates[cat]?.[dept]?.[ym]) {
                         let d = new Date();
-                        if (!this.checkDates[cat]) this.checkDates[cat] = {};
-                        if (!this.checkDates[cat][dept]) this.checkDates[cat][dept] = {};
                         this.checkDates[cat][dept][ym] = `${d.getMonth() + 1}/${d.getDate()}`;
                     }
-                    
-                    // 値があってもなくても、最後に必ずパッドを開く
                     this.openPad('check', cat, dept, null, ym);
                 },
 
@@ -914,7 +1036,6 @@
                     this.isPadOpen = false;
                 },
 
-                // 💡 完全に安全な分岐構造に変更
                 openPad(type, cat, dept, itemObj, ym) {
                     if (this.isEditMode) return;
                     this.padTarget = { type, cat, dept, item: itemObj, month: ym }; 

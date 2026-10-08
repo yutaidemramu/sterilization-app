@@ -1,4 +1,4 @@
-const CACHE_NAME = 'op-sterilization-v12'; // v12にアップデート
+const CACHE_NAME = 'op-sterilization-v14'; // v14にアップデート
 const urlsToCache = [
     './',
     './index.html',

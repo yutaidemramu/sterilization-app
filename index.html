@@ -6,12 +6,11 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     
-    <title>OP室 滅菌期限管理（v9 確実オフライン版）</title>
-    <!-- オフライン安定版CSS -->
+    <title>OP室 滅菌期限管理（v10 オフライン完全・安定版）</title>
+    <!-- 💡 すべての部品を絶対に保存できる安定版URLに変更 -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
-    
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.3/cdn.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     
     <style>
@@ -158,13 +157,13 @@
                                 <td class="border border-gray-300 p-0 h-12 relative hover:bg-yellow-200 transition-colors bg-yellow-50 cursor-pointer"
                                     @click="toggleCheckDate(activeCat, activeTab, ym)">
                                     <div class="w-full h-full flex items-center justify-center font-bold text-blue-700 text-sm md:text-base" 
-                                         x-text="checkDates[activeCat]?.[activeTab]?.[ym] || 'タップ'"></div>
+                                         x-text="(checkDates[activeCat] && checkDates[activeCat][activeTab] && checkDates[activeCat][activeTab][ym]) || 'タップ'"></div>
                                 </td>
                             </template>
                         </tr>
                     </thead>
-                    <tbody class="text-sm md:text-base" x-show="activeCat && activeTab && categories[activeCat]?.[activeTab]">
-                        <template x-for="(item, index) in categories[activeCat]?.[activeTab] || []" :key="item.id">
+                    <tbody class="text-sm md:text-base" x-show="activeCat && activeTab && categories[activeCat] && categories[activeCat][activeTab]">
+                        <template x-for="(item, index) in (categories[activeCat] && categories[activeCat][activeTab]) || []" :key="item.id">
                             <tr class="hover:bg-blue-50 transition-colors" :class="{'bg-green-50': isEditMode}">
                                 <td class="border border-gray-300 p-2 font-bold text-blue-900 sticky-col-1 whitespace-normal break-words align-middle" x-text="item.location"></td>
                                 
@@ -200,10 +199,10 @@
                                         @click="if(!isEditMode) openPad('item', activeCat, activeTab, item, ym)">
                                         <div class="w-full h-full flex items-center justify-center font-medium"
                                              :class="{
-                                                 'text-2xl font-black text-blue-600': inputs[activeCat]?.[activeTab]?.[item.id]?.[ym] === '➡' || inputs[activeCat]?.[activeTab]?.[item.id]?.[ym] === '→',
-                                                 'text-gray-300': !inputs[activeCat]?.[activeTab]?.[item.id]?.[ym]
+                                                 'text-2xl font-black text-blue-600': (inputs[activeCat] && inputs[activeCat][activeTab] && inputs[activeCat][activeTab][item.id] && inputs[activeCat][activeTab][item.id][ym]) === '➡' || (inputs[activeCat] && inputs[activeCat][activeTab] && inputs[activeCat][activeTab][item.id] && inputs[activeCat][activeTab][item.id][ym]) === '→',
+                                                 'text-gray-300': !(inputs[activeCat] && inputs[activeCat][activeTab] && inputs[activeCat][activeTab][item.id] && inputs[activeCat][activeTab][item.id][ym])
                                              }"
-                                             x-text="(!inputs[activeCat]?.[activeTab]?.[item.id]?.[ym]) ? '-' : (inputs[activeCat]?.[activeTab]?.[item.id]?.[ym] === '→' ? '➡' : inputs[activeCat]?.[activeTab]?.[item.id]?.[ym])">
+                                             x-text="!(inputs[activeCat] && inputs[activeCat][activeTab] && inputs[activeCat][activeTab][item.id] && inputs[activeCat][activeTab][item.id][ym]) ? '-' : ((inputs[activeCat][activeTab][item.id][ym]) === '→' ? '➡' : inputs[activeCat][activeTab][item.id][ym])">
                                         </div>
                                     </td>
                                 </template>
@@ -369,18 +368,60 @@
         </div>
     </div>
 
-    <!-- 💡 【必須】オフライン起動をブラウザに命令するスクリプト -->
+    <!-- 入力パネル -->
+    <div x-show="isPadOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-2" style="display: none;" @click.self="closePadCancel()">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl p-5 flex flex-col gap-3 transform transition-all">
+            <div class="text-center text-gray-600 font-bold text-lg border-b pb-2"><span x-text="padTitle"></span></div>
+            
+            <div class="bg-gray-100 rounded-xl p-3 flex flex-col md:flex-row items-center justify-between gap-4 border border-gray-200">
+                <div class="text-gray-600 font-bold">📆 数年先の期限（年指定）はこちら：</div>
+                <input type="date" x-model="calendarDate" @change="applyCalendarDate()" class="border-2 border-gray-300 rounded-lg px-4 py-2 text-xl font-bold bg-white text-blue-800 shadow-inner w-full md:w-auto">
+            </div>
+            
+            <div class="flex items-center justify-center text-5xl font-bold text-blue-800 h-14 tracking-wider mt-2">
+                <span x-text="selectedMonth ? selectedMonth : '--'" :class="{'text-gray-300': !selectedMonth}"></span>
+                <span class="mx-2 text-gray-400">/</span>
+                <span x-text="selectedDay ? selectedDay : '--'" :class="{'text-gray-300': !selectedDay}"></span>
+            </div>
+            
+            <div class="flex gap-4">
+                <div class="w-1/3 bg-blue-50 rounded-2xl p-3 border-2 border-blue-100">
+                    <div class="text-center font-bold text-blue-600 mb-2">月 (Month)</div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <template x-for="m in 12" :key="'m'+m">
+                            <button @click="selectMonth(m)" class="tap-btn h-10 md:h-12 rounded-xl text-lg md:text-xl font-bold shadow-sm" :class="selectedMonth === m ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-800 hover:bg-blue-100'" x-text="m"></button>
+                        </template>
+                    </div>
+                </div>
+                <div class="w-2/3 bg-indigo-50 rounded-2xl p-3 border-2 border-indigo-100">
+                    <div class="text-center font-bold text-indigo-600 mb-2">日 (Day)</div>
+                    <div class="grid grid-cols-7 gap-2">
+                        <template x-for="d in 31" :key="'d'+d">
+                            <button @click="selectDay(d)" class="tap-btn h-8 md:h-10 rounded-xl text-base md:text-lg font-bold shadow-sm" :class="selectedDay === d ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-800 hover:bg-indigo-100'" x-text="d"></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+                <button @click="closePadCancel()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl text-sm md:text-base shadow">キャンセル</button>
+                <button x-show="padTarget && padTarget.type === 'item'" @click="setArrow()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 border-2 border-blue-300 font-bold py-3 rounded-xl text-sm md:text-base shadow flex items-center justify-center gap-2">➡ <span>(先月と同)</span></button>
+                <div x-show="padTarget && padTarget.type === 'check'" class="flex items-center justify-center text-xs font-bold text-gray-400">※月・日で自動確定</div>
+                <button @click="clearSingleCell()" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border border-yellow-300 font-bold py-3 rounded-xl text-xs md:text-sm shadow">✕ この月だけ消す</button>
+                <button @click="clearAllRightCells()" class="bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 font-bold py-3 rounded-xl text-xs md:text-sm shadow">🗑 右もまとめて消す</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                // v=9 で最新版を強制読み込み
-                navigator.serviceWorker.register('./sw.js?v=9')
+                navigator.serviceWorker.register('./sw.js?v=10')
                     .then(registration => {
                         registration.addEventListener('updatefound', () => {
                             const newWorker = registration.installing;
                             newWorker.addEventListener('statechange', () => {
                                 if (newWorker.state === 'installed') {
-                                    // キャッシュ完了をお知らせ！
                                     alert('✅ オフライン起動の準備が完了しました！\n（通信を切っても使用可能です）');
                                 }
                             });
@@ -466,19 +507,18 @@
                     this.$watch('itemAlerts', val => localStorage.setItem('op_item_alerts_v4', JSON.stringify(val)), { deep: true });
                 },
                 
-                // 💡 強制リセット機能（バグを根絶やしにする）
                 resetData() {
                     if(confirm("※注意※\nすべてのデータとシステムエラーを完全に初期化します。\n本当によろしいですか？")) {
                         localStorage.clear();
                         if ('serviceWorker' in navigator) {
                             navigator.serviceWorker.getRegistrations().then(registrations => {
                                 for(let registration of registrations) {
-                                    registration.unregister(); // 古いエラー記憶を破壊
+                                    registration.unregister(); 
                                 }
                             });
                         }
                         caches.keys().then(names => {
-                            for (let name of names) caches.delete(name); // キャッシュも破壊
+                            for (let name of names) caches.delete(name); 
                         });
                         alert("初期化が完了しました。画面を再読み込みします。");
                         setTimeout(() => { location.reload(); }, 500);
@@ -601,8 +641,10 @@
 
                 toggleCheckDate(cat, dept, ym) {
                     if (this.isEditMode) return;
-                    if (!this.checkDates[cat]?.[dept]?.[ym]) {
+                    if (!this.checkDates[cat] || !this.checkDates[cat][dept] || !this.checkDates[cat][dept][ym]) {
                         let d = new Date();
+                        if (!this.checkDates[cat]) this.checkDates[cat] = {};
+                        if (!this.checkDates[cat][dept]) this.checkDates[cat][dept] = {};
                         this.checkDates[cat][dept][ym] = `${d.getMonth() + 1}/${d.getDate()}`;
                     } else {
                         this.openPad('check', cat, dept, null, ym);
@@ -821,9 +863,15 @@
                     const ym = this.padTarget.month; 
                     
                     if (this.padTarget.type === 'check') {
+                        if (!this.checkDates[cat]) this.checkDates[cat] = {};
+                        if (!this.checkDates[cat][dept]) this.checkDates[cat][dept] = {};
                         this.checkDates[cat][dept][ym] = value;
                     } else {
                         const itemId = this.padTarget.item.id;
+                        if (!this.inputs[cat]) this.inputs[cat] = {};
+                        if (!this.inputs[cat][dept]) this.inputs[cat][dept] = {};
+                        if (!this.inputs[cat][dept][itemId]) this.inputs[cat][dept][itemId] = {};
+                        
                         this.inputs[cat][dept][itemId][ym] = value;
                         
                         if (value === '➡' || value === '→' || value === '') {
@@ -869,7 +917,13 @@
                     this.padTarget = { type, cat, dept, item: itemObj, month: ym }; 
                     this.padTitle = type === 'check' ? `[確認日] ${this.formatMonthHeader(ym)} の設定` : `[${this.formatMonthHeader(ym)}期限] ${itemObj.name}`;
                     
-                    let currentVal = type === 'check' ? this.checkDates[cat]?.[dept]?.[ym] : this.inputs[cat]?.[dept]?.[itemObj.id]?.[ym];
+                    let currentVal = '';
+                    if (type === 'check') {
+                        currentVal = (this.checkDates[cat] && this.checkDates[cat][dept] && this.checkDates[cat][dept][ym]) || '';
+                    } else {
+                        currentVal = (this.inputs[cat] && this.inputs[cat][dept] && this.inputs[cat][dept][itemObj.id] && this.inputs[cat][dept][itemObj.id][ym]) || '';
+                    }
+                    
                     this.calendarDate = ''; 
                     
                     if (currentVal === '➡' || currentVal === '→') {
@@ -910,6 +964,11 @@
                     const cat = this.padTarget.cat;
                     const dept = this.padTarget.dept;
                     const ym = this.padTarget.month;
+                    
+                    if (!this.inputs[cat]) this.inputs[cat] = {};
+                    if (!this.inputs[cat][dept]) this.inputs[cat][dept] = {};
+                    if (!this.inputs[cat][dept][this.padTarget.item.id]) this.inputs[cat][dept][this.padTarget.item.id] = {};
+                    
                     this.inputs[cat][dept][this.padTarget.item.id][ym] = '➡';
                     this.isPadOpen = false;
                 },
@@ -919,9 +978,13 @@
                     const dept = this.padTarget.dept;
                     const ym = this.padTarget.month;
                     if (this.padTarget.type === 'check') {
-                        this.checkDates[cat][dept][ym] = '';
+                        if (this.checkDates[cat] && this.checkDates[cat][dept]) {
+                            this.checkDates[cat][dept][ym] = '';
+                        }
                     } else {
-                        this.inputs[cat][dept][this.padTarget.item.id][ym] = '';
+                        if (this.inputs[cat] && this.inputs[cat][dept] && this.inputs[cat][dept][this.padTarget.item.id]) {
+                            this.inputs[cat][dept][this.padTarget.item.id][ym] = '';
+                        }
                     }
                     this.isPadOpen = false;
                 },
@@ -931,21 +994,25 @@
                     const dept = this.padTarget.dept;
                     const ym = this.padTarget.month;
                     if (this.padTarget.type === 'check') {
-                        this.checkDates[cat][dept][ym] = '';
+                        if (this.checkDates[cat] && this.checkDates[cat][dept]) {
+                            this.checkDates[cat][dept][ym] = '';
+                        }
                     } else {
                         const itemId = this.padTarget.item.id;
-                        this.inputs[cat][dept][itemId][ym] = '';
-                        let startClear = false;
-                        for (let m of this.displayMonths) {
-                            if (startClear) {
-                                let cellVal = this.inputs[cat][dept][itemId][m];
-                                if (cellVal === '➡' || cellVal === '→') {
-                                    this.inputs[cat][dept][itemId][m] = '';
-                                } else if (cellVal !== '') {
-                                    break;
+                        if (this.inputs[cat] && this.inputs[cat][dept] && this.inputs[cat][dept][itemId]) {
+                            this.inputs[cat][dept][itemId][ym] = '';
+                            let startClear = false;
+                            for (let m of this.displayMonths) {
+                                if (startClear) {
+                                    let cellVal = this.inputs[cat][dept][itemId][m];
+                                    if (cellVal === '➡' || cellVal === '→') {
+                                        this.inputs[cat][dept][itemId][m] = '';
+                                    } else if (cellVal !== '') {
+                                        break;
+                                    }
                                 }
+                                if (m === ym) startClear = true;
                             }
-                            if (m === ym) startClear = true;
                         }
                     }
                     this.isPadOpen = false;
@@ -959,13 +1026,13 @@
                 closePadCancel() { this.isPadOpen = false; },
 
                 getAbsoluteDueDate(cat, dept, itemId, ym) {
-                    let val = this.inputs[cat]?.[dept]?.[itemId]?.[ym];
+                    let val = (this.inputs[cat] && this.inputs[cat][dept] && this.inputs[cat][dept][itemId] && this.inputs[cat][dept][itemId][ym]) || null;
                     if (!val) return null;
                     let targetYM = ym;
                     let actualStr = val;
                     if (val === '→' || val === '➡') {
                         actualStr = null;
-                        let allKeys = Object.keys(this.inputs[cat]?.[dept]?.[itemId] || {}).sort();
+                        let allKeys = Object.keys(this.inputs[cat][dept][itemId] || {}).sort();
                         let idx = allKeys.indexOf(ym);
                         for (let i = idx - 1; i >= 0; i--) {
                             let prevVal = this.inputs[cat][dept][itemId][allKeys[i]];
@@ -975,7 +1042,7 @@
                         }
                     }
                     if (!actualStr) return null;
-                    const checkStr = this.checkDates[cat]?.[dept]?.[targetYM];
+                    const checkStr = (this.checkDates[cat] && this.checkDates[cat][dept] && this.checkDates[cat][dept][targetYM]) || null;
                     const [ty, tm] = targetYM.split('-');
                     const baseDate = new Date(parseInt(ty), parseInt(tm) - 1, 1);
                     const checkDate = this.parseSmartDate(checkStr, baseDate) || baseDate;
@@ -998,7 +1065,7 @@
                 },
 
                 isAlert(cat, dept, itemId, ym) {
-                    if(!this.checkDates[cat]?.[dept] || !this.inputs[cat]?.[dept]?.[itemId]) return false;
+                    if(!(this.checkDates[cat] && this.checkDates[cat][dept]) || !(this.inputs[cat] && this.inputs[cat][dept] && this.inputs[cat][dept][itemId])) return false;
                     const checkStr = this.checkDates[cat][dept][ym];
                     if (!checkStr) return false;
                     
@@ -1019,7 +1086,7 @@
                 isChronologicalError(cat, dept, itemId, ym) {
                     const currentDate = this.getAbsoluteDueDate(cat, dept, itemId, ym);
                     if (!currentDate) return false;
-                    let currentVal = this.inputs[cat][dept][itemId][ym];
+                    let currentVal = (this.inputs[cat] && this.inputs[cat][dept] && this.inputs[cat][dept][itemId] && this.inputs[cat][dept][itemId][ym]) || null;
                     if (currentVal === '→' || currentVal === '➡') return false; 
                     
                     const allKeys = Object.keys(this.inputs[cat]?.[dept]?.[itemId] || {}).sort();
@@ -1056,7 +1123,7 @@
                                 limitDate.setMonth(today.getMonth() + threshold);
                                 
                                 const itemId = itemObj.id;
-                                const itemInputs = this.inputs[cat]?.[dept]?.[itemId] || {};
+                                const itemInputs = (this.inputs[cat] && this.inputs[cat][dept] && this.inputs[cat][dept][itemId]) || {};
                                 const allYMs = Object.keys(itemInputs).sort();
                                 if(allYMs.length === 0) continue;
                                 
